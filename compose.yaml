@@ -1,0 +1,21 @@
+name: space
+
+services:
+  postgres:
+    image: postgis/postgis:18-3.6
+    environment:
+      POSTGRES_USER: space
+      POSTGRES_PASSWORD: space
+      POSTGRES_DB: space
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U space -d space"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

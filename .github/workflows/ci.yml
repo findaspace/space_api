@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:18-3.6
+        env:
+          POSTGRES_USER: space
+          POSTGRES_PASSWORD: space
+          POSTGRES_DB: space
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U space -d space"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      SPACE_DATABASE_URL: postgres://space:space@localhost:5432/space?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27'
+          cache: true
+      - run: go mod download
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go run ./cmd/migrate
+      - run: go test -race -count=1 ./...

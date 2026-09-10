@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"time"
+
+	"github.com/samnart1/space_api/internal/platform/telemetry"
 )
 
 type Middleware func(http.Handler) http.Handler
@@ -71,4 +74,79 @@ func (w *responseWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
-func Logger(base *slog.Logger) Middleware {}
+func Logger(base *slog.Logger) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+
+			l := base.With(
+				slog.String("request_id", RequestIDFrom(r.Context())),
+				slog.String("method", r.Method),
+				slog.String("path", r.URL.Path),
+			)
+			ctx := telemetry.WithLogger(r.Context(), l)
+			rw := &responseWriter{ResponseWriter: w}
+
+			next.ServeHTTP(rw, r.WithContext(ctx))
+
+			if rw.status == 0 {
+				rw.status = http.StatusOK
+			}
+			l.LogAttrs(ctx, levelFor(rw.status), "http request",
+				slog.Int("status", rw.status),
+				slog.Int("bytes", rw.bytes),
+				slog.Duration("duration", time.Since(start)),
+			)
+		})
+	}
+}
+
+func levelFor(status int) slog.Level {
+	switch {
+	case status >= 500:
+		return slog.LevelError
+	case status >= 400:
+		return slog.LevelWarn
+	default:
+		return slog.LevelInfo
+	}
+}
+
+func Recover(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			rec := recover()
+			if rec == nil {
+				return
+			}
+			if rec == http.ErrAbortHandler {
+				panic(rec)
+			}
+			telemetry.Logger(r.Context()).Error("panic recovered",
+				slog.Any("panic", rec),
+				slog.String("stack", string(debug.Stack())),
+			)
+			WriteError(w, r, http.StatusInternalServerError, "internal server error")
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+func MaxBytes(n int64) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, n)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func SecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		next.ServeHTTP(w, r)
+	})
+}
