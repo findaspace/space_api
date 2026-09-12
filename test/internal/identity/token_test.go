@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/!azure/azure-sdk-for-go/sdk/internal/uuid"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
