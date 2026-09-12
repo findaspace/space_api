@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"os"
@@ -25,6 +26,14 @@ type Config struct {
 
 	LogLevel  slog.Level
 	LogFormat string
+
+	OTPPepper   []byte
+	OTPTTL      time.Duration
+	JWTSeed     []byte
+	JWTKeyID    string
+	AccessTTL   time.Duration
+	RefreshTTL  time.Duration
+	SMSProvider string
 }
 
 func (c Config) IsProduction() bool {
@@ -86,6 +95,20 @@ func (l *loader) level(key string, def slog.Level) slog.Level {
 	return lvl
 }
 
+func (l *loader) bytesB64(key string, minLen int) []byte {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		l.missing = append(l.missing, key)
+		return nil
+	}
+	b, err := base64.StdEncoding.DecodeString(v)
+	if err != nil || len(b) < minLen {
+		l.invalid = append(l.invalid, key)
+		return nil
+	}
+	return b
+}
+
 func Load() (Config, error) {
 	l := &loader{}
 
@@ -105,6 +128,14 @@ func Load() (Config, error) {
 
 		LogLevel:  l.level("SPACE_LOG_LEVEL", slog.LevelInfo),
 		LogFormat: l.str("SPACE_LOG_FORMAT", "json"),
+
+		OTPPepper:   l.bytesB64("SPACE_OTP_PEPPER", 32),
+		OTPTTL:      l.duration("SPACE_OTP_TTL", 5*time.Minute),
+		JWTSeed:     l.bytesB64("SPACE_JWT_SEED", 32),
+		JWTKeyID:    l.str("SPACE_JWT_KEY_ID", "k1"),
+		AccessTTL:   l.duration("SPACE_ACCESS_TTL", 15*time.Minute),
+		RefreshTTL:  l.duration("SPACE_REFRESH_TTL", 720*time.Hour),
+		SMSProvider: l.str("SPACE_SMS_PROVIDER", "log"),
 	}
 
 	var problems []string
@@ -119,6 +150,9 @@ func Load() (Config, error) {
 	}
 	if len(problems) > 0 {
 		return Config{}, fmt.Errorf("config: %s", strings.Join(problems, "; "))
+	}
+	if cfg.SMSProvider == "log" && cfg.IsProduction() {
+		problems = append(problems, "SPACE_SMS_PROVIDER=log writes OTP codes to the log and is refused in prod")
 	}
 	return cfg, nil
 }
