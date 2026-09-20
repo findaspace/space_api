@@ -8,6 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/samnart1/space_api/internal/booking"
+	"github.com/samnart1/space_api/internal/calendar"
 	"github.com/samnart1/space_api/internal/config"
 	"github.com/samnart1/space_api/internal/identity"
 	"github.com/samnart1/space_api/internal/listing"
@@ -116,6 +118,17 @@ func run() error {
 		MaxPerSpace: cfg.MediaMaxPerSpace,
 	})
 
+	calendarSvc := calendar.NewService(calendar.NewStore(pool), calendar.ServiceConfig{
+		PlatformFeeBps: cfg.PlatformFeeBps,
+	})
+
+	bookingSvc := booking.NewService(
+		booking.NewStore(pool),
+		spaceSource{listings: listingSvc},
+		pricer{listings: listingSvc, calendars: calendarSvc},
+		booking.ServiceConfig{HoldTTL: cfg.BookingHoldTTL},
+	)
+
 	router := httpapi.NewRouter(httpapi.Deps{
 		Pool:         pool,
 		Logger:       log,
@@ -128,6 +141,8 @@ func run() error {
 		TrustProxy:   cfg.TrustProxy,
 		Listing:      listingSvc,
 		Media:        mediaSvc,
+		Calendar:     calendarSvc,
+		Booking:      bookingSvc,
 	})
 
 	return httpapi.Run(ctx, httpapi.ServerConfig{

@@ -13,6 +13,141 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ActorKind string
+
+const (
+	ActorKindGuest  ActorKind = "guest"
+	ActorKindHost   ActorKind = "host"
+	ActorKindSystem ActorKind = "system"
+	ActorKindAdmin  ActorKind = "admin"
+)
+
+func (e *ActorKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ActorKind(s)
+	case string:
+		*e = ActorKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ActorKind: %T", src)
+	}
+	return nil
+}
+
+type NullActorKind struct {
+	ActorKind ActorKind
+	Valid     bool // Valid is true if ActorKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullActorKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.ActorKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ActorKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullActorKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ActorKind), nil
+}
+
+type BookingStatus string
+
+const (
+	BookingStatusHeld      BookingStatus = "held"
+	BookingStatusApproved  BookingStatus = "approved"
+	BookingStatusConfirmed BookingStatus = "confirmed"
+	BookingStatusActive    BookingStatus = "active"
+	BookingStatusCompleted BookingStatus = "completed"
+	BookingStatusCancelled BookingStatus = "cancelled"
+	BookingStatusDeclined  BookingStatus = "declined"
+	BookingStatusExpired   BookingStatus = "expired"
+)
+
+func (e *BookingStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = BookingStatus(s)
+	case string:
+		*e = BookingStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for BookingStatus: %T", src)
+	}
+	return nil
+}
+
+type NullBookingStatus struct {
+	BookingStatus BookingStatus
+	Valid         bool // Valid is true if BookingStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullBookingStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.BookingStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.BookingStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullBookingStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.BookingStatus), nil
+}
+
+type CancellationPolicy string
+
+const (
+	CancellationPolicyFlexible CancellationPolicy = "flexible"
+	CancellationPolicyModerate CancellationPolicy = "moderate"
+	CancellationPolicyStrict   CancellationPolicy = "strict"
+)
+
+func (e *CancellationPolicy) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CancellationPolicy(s)
+	case string:
+		*e = CancellationPolicy(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CancellationPolicy: %T", src)
+	}
+	return nil
+}
+
+type NullCancellationPolicy struct {
+	CancellationPolicy CancellationPolicy
+	Valid              bool // Valid is true if CancellationPolicy is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCancellationPolicy) Scan(value interface{}) error {
+	if value == nil {
+		ns.CancellationPolicy, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CancellationPolicy.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCancellationPolicy) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CancellationPolicy), nil
+}
+
 type MediaStatus string
 
 const (
@@ -368,6 +503,48 @@ func (ns NullUserStatus) Value() (driver.Value, error) {
 	return string(ns.UserStatus), nil
 }
 
+type AvailabilityBlock struct {
+	ID        uuid.UUID
+	SpaceID   uuid.UUID
+	StartsOn  time.Time
+	EndsOn    time.Time
+	Reason    string
+	CreatedAt time.Time
+}
+
+type Booking struct {
+	ID                 uuid.UUID
+	Reference          string
+	SpaceID            uuid.UUID
+	HostID             uuid.UUID
+	GuestID            uuid.UUID
+	RentalMode         RentalMode
+	Status             BookingStatus
+	StartsOn           time.Time
+	EndsOn             time.Time
+	Nights             int32
+	Months             int16
+	Guests             int16
+	Currency           string
+	SubtotalMinor      int64
+	DiscountMinor      int64
+	FeesMinor          int64
+	TotalMinor         int64
+	DueNowMinor        int64
+	Quote              []byte
+	IdempotencyKey     *string
+	HoldExpiresAt      pgtype.Timestamptz
+	ApprovedAt         pgtype.Timestamptz
+	ConfirmedAt        pgtype.Timestamptz
+	CancelledAt        pgtype.Timestamptz
+	CancelledBy        *ActorKind
+	CancelReason       string
+	RefundMinor        int64
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	CancellationPolicy CancellationPolicy
+}
+
 type OtpChallenge struct {
 	ID          uuid.UUID
 	PhoneE164   string
@@ -379,6 +556,18 @@ type OtpChallenge struct {
 	ConsumedAt  pgtype.Timestamptz
 	RequestIp   string
 	CreatedAt   time.Time
+}
+
+type RatePlan struct {
+	ID         uuid.UUID
+	SpaceID    uuid.UUID
+	Name       string
+	StartsOn   time.Time
+	EndsOn     time.Time
+	PriceMinor int64
+	MinNights  *int16
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type RoleGrant struct {
@@ -442,6 +631,17 @@ type SpaceMedium struct {
 	Status      MediaStatus
 	CreatedAt   time.Time
 	ReadyAt     pgtype.Timestamptz
+}
+
+type StayRule struct {
+	SpaceID            uuid.UUID
+	MinNights          int16
+	MaxNights          *int16
+	WeeklyDiscountBps  int16
+	MonthlyDiscountBps int16
+	CleaningFeeMinor   int64
+	UpdatedAt          time.Time
+	CancellationPolicy CancellationPolicy
 }
 
 type User struct {

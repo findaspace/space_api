@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/samnart1/space_api/internal/booking"
+	"github.com/samnart1/space_api/internal/calendar"
 	"github.com/samnart1/space_api/internal/identity"
 	"github.com/samnart1/space_api/internal/listing"
 	"github.com/samnart1/space_api/internal/media"
@@ -23,11 +25,15 @@ type Deps struct {
 	TrustProxy   bool
 	Listing      *listing.Service
 	Media        *media.Service
+	Calendar     *calendar.Service
+	Booking      *booking.Service
 }
 
 func NewRouter(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	auth := authHandler{svc: d.Identity, trustProxy: d.TrustProxy}
+	ch := calendarHandler{svc: d.Calendar, listings: d.Listing}
+	bh := bookingHandler{svc: d.Booking}
 
 	authed := RequireAuth(d.Tokens)
 
@@ -71,6 +77,26 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		WriteProblem(w, r, Problem{Status: http.StatusNotFound, Title: "not found"})
 	}))
+
+	mux.HandleFunc("GET /v1/listings/{slug}/quote", ch.quote)
+	mux.HandleFunc("GET /v1/listings/{slug}/calendar", ch.publicCalendar)
+
+	mux.Handle("GET /v1/spaces/{id}/rules", authed(http.HandlerFunc(ch.getRules)))
+	mux.Handle("PUT /v1/spaces/{id}/rules", authed(http.HandlerFunc(ch.setRules)))
+	mux.Handle("GET /v1/spaces/{id}/rate-plans", authed(http.HandlerFunc(ch.listPlans)))
+	mux.Handle("POST /v1/spaces/{id}/rate-plans", authed(http.HandlerFunc(ch.createPlan)))
+	mux.Handle("DELETE /v1/spaces/{id}/rate-plans/{planId}", authed(http.HandlerFunc(ch.deletePlan)))
+	mux.Handle("GET /v1/spaces/{id}/blocks", authed(http.HandlerFunc(ch.listBlocks)))
+	mux.Handle("POST /v1/spaces/{id}/blocks", authed(http.HandlerFunc(ch.createBlock)))
+	mux.Handle("DELETE /v1/spaces/{id}/blocks/{blockId}", authed(http.HandlerFunc(ch.deleteBlock)))
+
+	mux.Handle("POST /v1/bookings", authed(http.HandlerFunc(bh.create)))
+	mux.Handle("GET /v1/bookings", authed(http.HandlerFunc(bh.list)))
+	mux.Handle("GET /v1/bookings/{id}", authed(http.HandlerFunc(bh.get)))
+	mux.Handle("GET /v1/bookings/{id}/refund-quote", authed(http.HandlerFunc(bh.refundQuote)))
+	mux.Handle("POST /v1/bookings/{id}/cancel", authed(http.HandlerFunc(bh.cancel)))
+	mux.Handle("POST /v1/bookings/{id}/approve", authed(http.HandlerFunc(bh.approve)))
+	mux.Handle("POST /v1/bookings/{id}/decline", authed(http.HandlerFunc(bh.decline)))
 
 	return Chain(mux,
 		RequestID,

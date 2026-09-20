@@ -44,3 +44,11 @@ tidy:
 
 generate: ## regenerate sqlc output
 	sqlc generate
+
+test-integration: ## run tests against the local database
+	SPACE_TEST_DATABASE_URL="postgres://space:space@localhost:5432/space?sslmode=disable" \
+		go test -race -count=1 ./... -run Integration -v
+
+itest: ## run every test, integration included
+	SPACE_TEST_DATABASE_URL="postgres://space:space@localhost:5432/space?sslmode=disable" \
+		go test -race -count=1 ./...

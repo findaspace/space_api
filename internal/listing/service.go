@@ -242,3 +242,16 @@ func normalizeLocation(l Location) Location {
 	l.Country = strings.ToUpper(defaultString(l.Country, "GH"))
 	return l
 }
+
+// GetAnyPublished fetches a listing by id with no ownership check. Only
+// published listings come back, so the booking path can call it safely.
+func (s *Service) GetAnyPublished(ctx context.Context, id uuid.UUID) (Space, error) {
+	sp, err := s.store.GetAny(ctx, id)
+	if err != nil {
+		return Space{}, err
+	}
+	if sp.Status != StatusPublished {
+		return Space{}, ErrNotFound
+	}
+	return sp, nil
+}

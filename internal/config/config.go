@@ -52,6 +52,10 @@ type Config struct {
 	UploadURLTTL         time.Duration
 	MediaMaxBytes        int64
 	MediaMaxPerSpace     int
+
+	PlatformFeeBps int
+
+	BookingHoldTTL time.Duration
 }
 
 func (c Config) IsProduction() bool {
@@ -185,6 +189,10 @@ func Load() (Config, error) {
 		UploadURLTTL:         l.duration("SPACE_UPLOAD_URL_TTL", 15*time.Minute),
 		MediaMaxBytes:        l.int64("SPACE_MEDIA_MAX_BYTES", 10<<20),
 		MediaMaxPerSpace:     l.int("SPACE_MEDIA_MAX_PER_SPACE", 20),
+
+		PlatformFeeBps: l.int("SPACE_PLATFORM_FEE_BPS", 1000),
+
+		BookingHoldTTL: l.duration("SPACE_BOOKING_HOLD_TTL", 30*time.Minute),
 	}
 
 	var problems []string
