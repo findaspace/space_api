@@ -139,7 +139,7 @@ func (s *Store) Login(ctx context.Context, challengeID uuid.UUID, phone, userAge
 		}
 
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO user_grants (user_id, role) VALUES ($1, 'guest'::user_role)
+			`INSERT INTO role_grants (user_id, role) VALUES ($1, 'guest'::user_role)
 			 ON CONFLICT DO NOTHING`, user.ID); err != nil {
 			return fmt.Errorf("grant guest role: %w", err)
 		}
@@ -290,7 +290,7 @@ type querier interface {
 }
 
 func loadRoles(ctx context.Context, q querier, userID uuid.UUID) ([]Role, error) {
-	rows, err := q.Query(ctx, `SELECT role::text FROM user_grants WHERE user_id = $1 ORDER BY role`, userID)
+	rows, err := q.Query(ctx, `SELECT role::text FROM role_grants WHERE user_id = $1 ORDER BY role`, userID)
 
 	if err != nil {
 		return nil, fmt.Errorf("load roles: %w", err)
