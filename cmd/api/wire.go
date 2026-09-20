@@ -4,15 +4,49 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/samnart1/space_api/internal/booking"
 	"github.com/samnart1/space_api/internal/calendar"
+	"github.com/samnart1/space_api/internal/identity"
 	"github.com/samnart1/space_api/internal/listing"
+	"github.com/samnart1/space_api/internal/payment"
 )
 
 // The composition root is where cross-domain adapters belong. booking declares
 // what it needs, listing and calendar provide it, and neither imports the other.
 type spaceSource struct{ listings *listing.Service }
+
+type bookingGateway struct{ bookings *booking.Service }
+
+func (g bookingGateway) Snapshot(ctx context.Context, id uuid.UUID) (payment.Snapshot, error) {
+	b, err := g.bookings.ByID(ctx, id)
+	if err != nil {
+		return payment.Snapshot{}, err
+	}
+	return payment.Snapshot{
+		ID: b.ID, Reference: b.Reference, HostID: b.HostID, GuestID: b.GuestID,
+		Status: string(b.Status), Mode: string(b.Mode),
+		Currency: b.Currency, DueNowMinor: b.DueNowMinor, FeesMinor: b.FeesMinor,
+	}, nil
+}
+
+func (g bookingGateway) MarkPaid(ctx context.Context, tx pgx.Tx, id uuid.UUID, from string) error {
+	return g.bookings.MarkPaidTx(ctx, tx, id, booking.Status(from))
+}
+
+type payerSource struct{ identity *identity.Service }
+
+func (p payerSource) ContactFor(ctx context.Context, userID uuid.UUID) (string, string, error) {
+	u, err := p.identity.Me(ctx, userID)
+	if err != nil {
+		return "", "", err
+	}
+	if u.Email != nil {
+		return *u.Email, u.Phone, nil
+	}
+	return "", u.Phone, nil
+}
 
 func (s spaceSource) BookableSpace(ctx context.Context, spaceID uuid.UUID) (booking.Space, error) {
 	sp, err := s.listings.GetAnyPublished(ctx, spaceID)

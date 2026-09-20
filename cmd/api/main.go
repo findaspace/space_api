@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/samnart1/space_api/internal/booking"
@@ -14,7 +15,9 @@ import (
 	"github.com/samnart1/space_api/internal/identity"
 	"github.com/samnart1/space_api/internal/listing"
 	"github.com/samnart1/space_api/internal/media"
+	"github.com/samnart1/space_api/internal/payment"
 	"github.com/samnart1/space_api/internal/platform/objectstore"
+	"github.com/samnart1/space_api/internal/platform/paystack"
 	"github.com/samnart1/space_api/internal/platform/postgres"
 	"github.com/samnart1/space_api/internal/platform/sms"
 	"github.com/samnart1/space_api/internal/platform/telemetry"
@@ -129,6 +132,19 @@ func run() error {
 		booking.ServiceConfig{HoldTTL: cfg.BookingHoldTTL},
 	)
 
+	paystackClient := paystack.New(cfg.PaystackSecret, cfg.PaystackBaseURL, cfg.PaystackTimeout)
+
+	paymentSvc := payment.NewService(
+		payment.NewStore(pool), paystackClient,
+		bookingGateway{bookings: bookingSvc},
+		payerSource{identity: identitySvc},
+		log,
+		payment.ServiceConfig{
+			Secret:      cfg.PaystackSecret,
+			CallbackURL: cfg.PaystackCallbackURL,
+			Channels:    []string{"mobile_money", "card"},
+		})
+
 	router := httpapi.NewRouter(httpapi.Deps{
 		Pool:         pool,
 		Logger:       log,
@@ -143,7 +159,12 @@ func run() error {
 		Media:        mediaSvc,
 		Calendar:     calendarSvc,
 		Booking:      bookingSvc,
+		Payment:      paymentSvc,
 	})
+
+	log.Info("paystack configured",
+		slog.String("base_url", cfg.PaystackBaseURL),
+		slog.Bool("test_key", strings.HasPrefix(cfg.PaystackSecret, "sk_test_")))
 
 	return httpapi.Run(ctx, httpapi.ServerConfig{
 		Addr:            cfg.HTTPAddr,

@@ -286,3 +286,34 @@ func (s *Store) list(ctx context.Context, where string, id uuid.UUID, limit, off
 	}
 	return out, rows.Err()
 }
+
+func (s *Store) TransitionTx(ctx context.Context, tx pgx.Tx, in TransitionInput) error {
+	tag, err := tx.Exec(ctx, `
+		UPDATE bookings SET
+			status = $3::booking_status,
+			confirmed_at = COALESCE(confirmed_at, now()),
+			hold_expires_at = NULL
+		WHERE id = $1 AND status = $2::booking_status`,
+		in.ID, string(in.From), string(in.To))
+	if err != nil {
+		return fmt.Errorf("transition booking: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrConflict
+	}
+	return nil
+}
+
+// ByID skips the party check. Only the payment path uses it, driven by a
+// signature-verified webhook rather than by a user request.
+func (s *Store) ByID(ctx context.Context, id uuid.UUID) (Booking, error) {
+	b, err := scan(s.pool.QueryRow(ctx,
+		`SELECT `+bookingColumns+` FROM bookings WHERE id = $1`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Booking{}, ErrNotFound
+	}
+	if err != nil {
+		return Booking{}, fmt.Errorf("get booking: %w", err)
+	}
+	return b, nil
+}

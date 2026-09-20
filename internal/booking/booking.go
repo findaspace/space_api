@@ -103,3 +103,6 @@ func NewReference() (string, error) {
 	}
 	return "SPC-" + string(out), nil
 }
+
+// ByID skips the party check. Only the payment path calls it, driven by a
+// verified webhook rather than by a user.

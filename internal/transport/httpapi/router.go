@@ -11,6 +11,7 @@ import (
 	"github.com/samnart1/space_api/internal/identity"
 	"github.com/samnart1/space_api/internal/listing"
 	"github.com/samnart1/space_api/internal/media"
+	"github.com/samnart1/space_api/internal/payment"
 )
 
 type Deps struct {
@@ -27,6 +28,7 @@ type Deps struct {
 	Media        *media.Service
 	Calendar     *calendar.Service
 	Booking      *booking.Service
+	Payment      *payment.Service
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -34,8 +36,12 @@ func NewRouter(d Deps) http.Handler {
 	auth := authHandler{svc: d.Identity, trustProxy: d.TrustProxy}
 	ch := calendarHandler{svc: d.Calendar, listings: d.Listing}
 	bh := bookingHandler{svc: d.Booking}
+	ph := paymentHandler{svc: d.Payment}
 
 	authed := RequireAuth(d.Tokens)
+
+	mux.Handle("POST /v1/bookings/{id}/pay", authed(http.HandlerFunc(ph.intent)))
+	mux.HandleFunc("POST /v1/webhooks/paystack", ph.webhook)
 
 	lh := listingHandler{svc: d.Listing}
 

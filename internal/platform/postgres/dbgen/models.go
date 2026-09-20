@@ -148,6 +148,138 @@ func (ns NullCancellationPolicy) Value() (driver.Value, error) {
 	return string(ns.CancellationPolicy), nil
 }
 
+type EntryDirection string
+
+const (
+	EntryDirectionDebit  EntryDirection = "debit"
+	EntryDirectionCredit EntryDirection = "credit"
+)
+
+func (e *EntryDirection) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = EntryDirection(s)
+	case string:
+		*e = EntryDirection(s)
+	default:
+		return fmt.Errorf("unsupported scan type for EntryDirection: %T", src)
+	}
+	return nil
+}
+
+type NullEntryDirection struct {
+	EntryDirection EntryDirection
+	Valid          bool // Valid is true if EntryDirection is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullEntryDirection) Scan(value interface{}) error {
+	if value == nil {
+		ns.EntryDirection, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.EntryDirection.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullEntryDirection) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.EntryDirection), nil
+}
+
+type LedgerAccount string
+
+const (
+	LedgerAccountPspClearing     LedgerAccount = "psp_clearing"
+	LedgerAccountBank            LedgerAccount = "bank"
+	LedgerAccountHostPayable     LedgerAccount = "host_payable"
+	LedgerAccountPlatformRevenue LedgerAccount = "platform_revenue"
+	LedgerAccountRefundsPayable  LedgerAccount = "refunds_payable"
+)
+
+func (e *LedgerAccount) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LedgerAccount(s)
+	case string:
+		*e = LedgerAccount(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LedgerAccount: %T", src)
+	}
+	return nil
+}
+
+type NullLedgerAccount struct {
+	LedgerAccount LedgerAccount
+	Valid         bool // Valid is true if LedgerAccount is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLedgerAccount) Scan(value interface{}) error {
+	if value == nil {
+		ns.LedgerAccount, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LedgerAccount.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLedgerAccount) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LedgerAccount), nil
+}
+
+type LedgerKind string
+
+const (
+	LedgerKindCharge     LedgerKind = "charge"
+	LedgerKindRefund     LedgerKind = "refund"
+	LedgerKindPayout     LedgerKind = "payout"
+	LedgerKindSettlement LedgerKind = "settlement"
+	LedgerKindReversal   LedgerKind = "reversal"
+)
+
+func (e *LedgerKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LedgerKind(s)
+	case string:
+		*e = LedgerKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LedgerKind: %T", src)
+	}
+	return nil
+}
+
+type NullLedgerKind struct {
+	LedgerKind LedgerKind
+	Valid      bool // Valid is true if LedgerKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLedgerKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.LedgerKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LedgerKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLedgerKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LedgerKind), nil
+}
+
 type MediaStatus string
 
 const (
@@ -230,6 +362,51 @@ func (ns NullOtpPurpose) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.OtpPurpose), nil
+}
+
+type PaymentStatus string
+
+const (
+	PaymentStatusPending    PaymentStatus = "pending"
+	PaymentStatusProcessing PaymentStatus = "processing"
+	PaymentStatusSucceeded  PaymentStatus = "succeeded"
+	PaymentStatusFailed     PaymentStatus = "failed"
+	PaymentStatusAbandoned  PaymentStatus = "abandoned"
+)
+
+func (e *PaymentStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PaymentStatus(s)
+	case string:
+		*e = PaymentStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PaymentStatus: %T", src)
+	}
+	return nil
+}
+
+type NullPaymentStatus struct {
+	PaymentStatus PaymentStatus
+	Valid         bool // Valid is true if PaymentStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPaymentStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.PaymentStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PaymentStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPaymentStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PaymentStatus), nil
 }
 
 type PricePeriod string
@@ -545,6 +722,26 @@ type Booking struct {
 	CancellationPolicy CancellationPolicy
 }
 
+type LedgerEntry struct {
+	ID            uuid.UUID
+	TransactionID uuid.UUID
+	Account       LedgerAccount
+	Direction     EntryDirection
+	AmountMinor   int64
+	PartyID       uuid.NullUUID
+	CreatedAt     time.Time
+}
+
+type LedgerTransaction struct {
+	ID          uuid.UUID
+	Kind        LedgerKind
+	BookingID   uuid.NullUUID
+	Currency    string
+	Memo        string
+	ExternalRef *string
+	CreatedAt   time.Time
+}
+
 type OtpChallenge struct {
 	ID          uuid.UUID
 	PhoneE164   string
@@ -556,6 +753,26 @@ type OtpChallenge struct {
 	ConsumedAt  pgtype.Timestamptz
 	RequestIp   string
 	CreatedAt   time.Time
+}
+
+type Payment struct {
+	ID               uuid.UUID
+	BookingID        uuid.UUID
+	PayerID          uuid.UUID
+	Provider         string
+	ProviderRef      string
+	ProviderTxnID    string
+	AccessCode       string
+	AuthorizationUrl string
+	Channel          string
+	Status           PaymentStatus
+	Currency         string
+	AmountMinor      int64
+	ProviderFeeMinor int64
+	FailureReason    string
+	PaidAt           pgtype.Timestamptz
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 type RatePlan struct {
@@ -653,4 +870,15 @@ type User struct {
 	PhoneVerifiedAt pgtype.Timestamptz
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+}
+
+type WebhookEvent struct {
+	ID          uuid.UUID
+	Provider    string
+	EventKey    string
+	EventType   string
+	Payload     []byte
+	ReceivedAt  time.Time
+	ProcessedAt pgtype.Timestamptz
+	Error       string
 }

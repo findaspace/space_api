@@ -56,6 +56,11 @@ type Config struct {
 	PlatformFeeBps int
 
 	BookingHoldTTL time.Duration
+
+	PaystackSecret      string
+	PaystackBaseURL     string
+	PaystackCallbackURL string
+	PaystackTimeout     time.Duration
 }
 
 func (c Config) IsProduction() bool {
@@ -193,6 +198,11 @@ func Load() (Config, error) {
 		PlatformFeeBps: l.int("SPACE_PLATFORM_FEE_BPS", 1000),
 
 		BookingHoldTTL: l.duration("SPACE_BOOKING_HOLD_TTL", 30*time.Minute),
+
+		PaystackSecret:      l.str("SPACE_PAYSTACK_SECRET", ""),
+		PaystackBaseURL:     l.str("SPACE_PAYSTACK_BASE_URL", "https://api.paystack.co"),
+		PaystackCallbackURL: l.str("SPACE_PAYSTACK_CALLBACK_URL", ""),
+		PaystackTimeout:     l.duration("SPACE_PAYSTACK_TIMEOUT", 20*time.Second),
 	}
 
 	var problems []string
@@ -210,6 +220,18 @@ func Load() (Config, error) {
 	}
 	if cfg.SMSProvider == "log" && cfg.IsProduction() {
 		problems = append(problems, "SPACE_SMS_PROVIDER=log writes OTP codes to the log and is refused in prod")
+	}
+	if cfg.SMSProvider == "log" && cfg.IsProduction() {
+		problems = append(problems, "SPACE_SMS_PROVIDER=log writes OTP codes to the log and is refused in production")
+	}
+	if cfg.IsProduction() && !strings.HasPrefix(cfg.PaystackSecret, "sk_live_") {
+		problems = append(problems, "SPACE_PAYSTACK_SECRET must be a live key in production")
+	}
+	if cfg.IsProduction() && cfg.PaystackBaseURL != "https://api.paystack.co" {
+		problems = append(problems, "SPACE_PAYSTACK_BASE_URL must be Paystack in production")
+	}
+	if len(problems) > 0 {
+		return Config{}, fmt.Errorf("config: %s", strings.Join(problems, "; "))
 	}
 	return cfg, nil
 }

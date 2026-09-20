@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // Space is what the booking engine needs to know about a listing. Declared
@@ -228,5 +229,22 @@ func (s *Service) hostDecision(ctx context.Context, id, hostID uuid.UUID, to Sta
 
 	return s.store.Transition(ctx, TransitionInput{
 		ID: b.ID, From: b.Status, To: to, Actor: ActorHost, Reason: reason,
+	})
+}
+
+func (s *Service) ByID(ctx context.Context, id uuid.UUID) (Booking, error) {
+	return s.store.ByID(ctx, id)
+}
+
+func (s *Service) MarkPaidTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, from Status) error {
+	b, err := s.store.ByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := Authorize(b.Mode, from, StatusConfirmed, ActorSystem); err != nil {
+		return err
+	}
+	return s.store.TransitionTx(ctx, tx, TransitionInput{
+		ID: id, From: from, To: StatusConfirmed, Actor: ActorSystem,
 	})
 }
