@@ -120,7 +120,7 @@ type Line struct {
 type Quote struct {
 	Mode          string       `json:"mode"`
 	Currency      string       `json:"currency"`
-	Policy        string       `json:cancellation_policy`
+	Policy        string       `json:"cancellation_policy"`
 	CheckIn       *time.Time   `json:"check_in,omitempty"`
 	CheckOut      *time.Time   `json:"check_out,omitempty"`
 	Nights        int          `json:"nights,omitempty"`
