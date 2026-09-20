@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/samnart1/space_api/internal/identity"
 	"github.com/samnart1/space_api/internal/listing"
+	"github.com/samnart1/space_api/internal/media"
 )
 
 type Deps struct {
@@ -21,18 +22,30 @@ type Deps struct {
 	Tokens       *identity.TokenIssuer
 	TrustProxy   bool
 	Listing      *listing.Service
+	Media        *media.Service
 }
 
 func NewRouter(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	auth := authHandler{svc: d.Identity, trustProxy: d.TrustProxy}
 
+	authed := RequireAuth(d.Tokens)
+
 	lh := listingHandler{svc: d.Listing}
+
+	mh := mediaHandler{svc: d.Media, listings: d.Listing}
+
+	mux.HandleFunc("GET /v1/listings/{slug}/media", mh.listPublic)
+
+	mux.Handle("GET /v1/spaces/{id}/media", authed(http.HandlerFunc(mh.listOwn)))
+	mux.Handle("POST /v1/spaces/{id}/media", authed(http.HandlerFunc(mh.requestUpload)))
+	mux.Handle("PUT /v1/spaces/{id}/media/order", authed(http.HandlerFunc(mh.reorder)))
+	mux.Handle("POST /v1/spaces/{id}/media/{mediaId}/confirm", authed(http.HandlerFunc(mh.confirm)))
+	mux.Handle("DELETE /v1/spaces/{id}/media/{mediaId}", authed(http.HandlerFunc(mh.remove)))
 
 	mux.HandleFunc("GET /v1/space-types", lh.spaceTypes)
 	mux.HandleFunc("GET /v1/listings/{slug}", lh.getPublic)
 
-	authed := RequireAuth(d.Tokens)
 	mux.Handle("POST /v1/spaces", authed(http.HandlerFunc(lh.create)))
 	mux.Handle("GET /v1/spaces", authed(http.HandlerFunc(lh.list)))
 	mux.Handle("GET /v1/spaces/{id}", authed(http.HandlerFunc(lh.getOwn)))

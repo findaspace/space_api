@@ -13,6 +13,48 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type MediaStatus string
+
+const (
+	MediaStatusPending MediaStatus = "pending"
+	MediaStatusReady   MediaStatus = "ready"
+)
+
+func (e *MediaStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = MediaStatus(s)
+	case string:
+		*e = MediaStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for MediaStatus: %T", src)
+	}
+	return nil
+}
+
+type NullMediaStatus struct {
+	MediaStatus MediaStatus
+	Valid       bool // Valid is true if MediaStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullMediaStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.MediaStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.MediaStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullMediaStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.MediaStatus), nil
+}
+
 type OtpPurpose string
 
 const (
@@ -386,6 +428,20 @@ type Space struct {
 	PublishedAt    pgtype.Timestamptz
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+type SpaceMedium struct {
+	ID          uuid.UUID
+	SpaceID     uuid.UUID
+	ObjectKey   string
+	ContentType string
+	ByteSize    int64
+	Width       int32
+	Height      int32
+	Position    int32
+	Status      MediaStatus
+	CreatedAt   time.Time
+	ReadyAt     pgtype.Timestamptz
 }
 
 type User struct {

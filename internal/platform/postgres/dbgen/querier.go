@@ -11,11 +11,20 @@ import (
 )
 
 type Querier interface {
+	CountMedia(ctx context.Context, spaceID uuid.UUID) (int64, error)
+	CountReadyMedia(ctx context.Context, spaceID uuid.UUID) (int64, error)
+	CreateMedia(ctx context.Context, arg CreateMediaParams) (SpaceMedium, error)
 	CreateSpace(ctx context.Context, arg CreateSpaceParams) (Space, error)
+	DeleteMedia(ctx context.Context, arg DeleteMediaParams) (string, error)
+	GetMedia(ctx context.Context, arg GetMediaParams) (SpaceMedium, error)
 	GetPublishedSpaceBySlug(ctx context.Context, slug string) (Space, error)
 	GetSpaceByID(ctx context.Context, id uuid.UUID) (Space, error)
 	GetSpaceForHost(ctx context.Context, arg GetSpaceForHostParams) (Space, error)
+	ListMedia(ctx context.Context, spaceID uuid.UUID) ([]SpaceMedium, error)
 	ListSpacesForHost(ctx context.Context, arg ListSpacesForHostParams) ([]Space, error)
+	MarkMediaReady(ctx context.Context, arg MarkMediaReadyParams) (SpaceMedium, error)
+	NextMediaPosition(ctx context.Context, spaceID uuid.UUID) (int32, error)
+	SetMediaPosition(ctx context.Context, arg SetMediaPositionParams) error
 	SetSpaceStatus(ctx context.Context, arg SetSpaceStatusParams) (Space, error)
 	UpdateSpace(ctx context.Context, arg UpdateSpaceParams) (Space, error)
 }

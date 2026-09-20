@@ -41,6 +41,17 @@ type Config struct {
 	OTPMaxPerIp    int
 	SessionMaxAge  time.Duration
 	TrustProxy     bool
+
+	StorageEndpoint      string
+	StorageRegion        string
+	StorageBucket        string
+	StorageAccessKey     string
+	StorageSecretKey     string
+	StoragePathStyle     bool
+	StoragePublicBaseURL string
+	UploadURLTTL         time.Duration
+	MediaMaxBytes        int64
+	MediaMaxPerSpace     int
 }
 
 func (c Config) IsProduction() bool {
@@ -116,6 +127,19 @@ func (l *loader) bytesB64(key string, minLen int) []byte {
 	return b
 }
 
+func (l *loader) int64(key string, def int64) int64 {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		l.invalid = append(l.invalid, key)
+		return def
+	}
+	return n
+}
+
 func Load() (Config, error) {
 	l := &loader{}
 
@@ -150,6 +174,17 @@ func Load() (Config, error) {
 		OTPMaxPerIp:    l.int("SPACE_OTP_MAX_PER_IP", 15),
 		SessionMaxAge:  l.duration("SPACEP_SESSION_MAX_AGE", 2160*time.Hour),
 		TrustProxy:     l.boolean("SPACE_TRUST_PROXY", false),
+
+		StorageEndpoint:      l.str("SPACE_STORAGE_ENDPOINT", ""),
+		StorageRegion:        l.str("SPACE_STORAGE_REGION", "auto"),
+		StorageBucket:        l.str("SPACE_STORAGE_BUCKET", ""),
+		StorageAccessKey:     l.str("SPACE_STORAGE_ACCESS_KEY", ""),
+		StorageSecretKey:     l.str("SPACE_STORAGE_SECRET_KEY", ""),
+		StoragePathStyle:     l.boolean("SPACE_STORAGE_PATH_STYLE", true),
+		StoragePublicBaseURL: l.str("SPACE_STORAGE_PUBLIC_BASE_URL", ""),
+		UploadURLTTL:         l.duration("SPACE_UPLOAD_URL_TTL", 15*time.Minute),
+		MediaMaxBytes:        l.int64("SPACE_MEDIA_MAX_BYTES", 10<<20),
+		MediaMaxPerSpace:     l.int("SPACE_MEDIA_MAX_PER_SPACE", 20),
 	}
 
 	var problems []string

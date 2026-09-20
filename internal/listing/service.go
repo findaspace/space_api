@@ -16,13 +16,24 @@ type RoleGranter interface {
 	GrantHost(ctx context.Context, userID uuid.UUID) error
 }
 
+type MediaCounter interface {
+	CountReady(ctx context.Context, spaceID uuid.UUID) (int, error)
+}
+
 type Service struct {
 	store *Store
 	roles RoleGranter
+	media MediaCounter
 }
 
-func NewService(store *Store, roles RoleGranter) *Service {
-	return &Service{store: store, roles: roles}
+func NewService(store *Store, roles RoleGranter, media MediaCounter) *Service {
+	return &Service{store: store, roles: roles, media: media}
+}
+
+// AssertHostOwns satisfies media.SpaceOwnership.
+func (s *Service) AssertHostOwns(ctx context.Context, spaceID, hostID uuid.UUID) error {
+	_, err := s.store.GetForHost(ctx, spaceID, hostID)
+	return err
 }
 
 type CreateInput struct {
@@ -126,7 +137,7 @@ func (s *Service) Submit(ctx context.Context, id, hostID uuid.UUID) (Space, erro
 	if !CanTransition(current.Status, StatusInReview) {
 		return Space{}, ErrBadTransition
 	}
-	if err := checkReady(current); err != nil {
+	if err := s.checkReady(ctx, current); err != nil {
 		return Space{}, err
 	}
 	return s.store.SetStatus(ctx, id, current.Status, StatusInReview)
@@ -150,7 +161,7 @@ func (s *Service) Publish(ctx context.Context, id uuid.UUID) (Space, error) {
 	if !CanTransition(current.Status, StatusPublished) {
 		return Space{}, ErrBadTransition
 	}
-	if err := checkReady(current); err != nil {
+	if err := s.checkReady(ctx, current); err != nil {
 		return Space{}, err
 	}
 	return s.store.SetStatus(ctx, id, current.Status, StatusPublished)
@@ -171,7 +182,7 @@ func (s *Service) hostTransition(ctx context.Context, id, hostID uuid.UUID, to S
 // while the attribute schema gains a required field, so validating only at
 // write time publishes listings that no longer satisfy their own schema.
 // Phase 3c adds the photo requirement here.
-func checkReady(sp Space) error {
+func (s *Service) checkReady(ctx context.Context, sp Space) error {
 	var issues []FieldIssue
 
 	if len(strings.TrimSpace(sp.Description)) < minDescriptionLen {
@@ -190,6 +201,17 @@ func checkReady(sp Space) error {
 		} else {
 			return err
 		}
+	}
+
+	photos, err := s.media.CountReady(ctx, sp.ID)
+	if err != nil {
+		return err
+	}
+	if photos < 1 {
+		issues = append(issues, FieldIssue{
+			Field: "photos", Code: "required",
+			Detail: "add at least one photo before publishing",
+		})
 	}
 
 	if len(issues) > 0 {

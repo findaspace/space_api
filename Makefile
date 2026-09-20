@@ -17,6 +17,9 @@ help:
 up: ## start local dependencies
 	docker compose up -d --wait
 
+stop:
+	docker compose stop
+
 down: ## stop and wipe local dependencies
 	docker compose down -v
 

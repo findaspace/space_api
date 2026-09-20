@@ -11,6 +11,8 @@ import (
 	"github.com/samnart1/space_api/internal/config"
 	"github.com/samnart1/space_api/internal/identity"
 	"github.com/samnart1/space_api/internal/listing"
+	"github.com/samnart1/space_api/internal/media"
+	"github.com/samnart1/space_api/internal/platform/objectstore"
 	"github.com/samnart1/space_api/internal/platform/postgres"
 	"github.com/samnart1/space_api/internal/platform/sms"
 	"github.com/samnart1/space_api/internal/platform/telemetry"
@@ -86,7 +88,33 @@ func run() error {
 			RefreshTTL:     cfg.RefreshTTL,
 			SessionMaxAge:  cfg.SessionMaxAge,
 		})
-	listingSvc := listing.NewService(listing.NewStore(pool), identitySvc)
+	// listingSvc := listing.NewService(listing.NewStore(pool), identitySvc)
+
+	objects, err := objectstore.New(ctx, objectstore.Config{
+		Endpoint:       cfg.StorageEndpoint,
+		Region:         cfg.StorageRegion,
+		Bucket:         cfg.StorageBucket,
+		AccessKey:      cfg.StorageAccessKey,
+		SecretKey:      cfg.StorageSecretKey,
+		ForcePathStyle: cfg.StoragePathStyle,
+		PublicBaseURL:  cfg.StoragePublicBaseURL,
+		PresignTTL:     cfg.UploadURLTTL,
+	})
+	if err != nil {
+		return err
+	}
+	if !cfg.IsProduction() {
+		if err := objects.EnsureBucket(ctx); err != nil {
+			return err
+		}
+	}
+
+	mediaStore := media.NewStore(pool)
+	listingSvc := listing.NewService(listing.NewStore(pool), identitySvc, mediaStore)
+	mediaSvc := media.NewService(mediaStore, objects, listingSvc, media.ServiceConfig{
+		MaxBytes:    cfg.MediaMaxBytes,
+		MaxPerSpace: cfg.MediaMaxPerSpace,
+	})
 
 	router := httpapi.NewRouter(httpapi.Deps{
 		Pool:         pool,
@@ -99,6 +127,7 @@ func run() error {
 		Tokens:       tokens,
 		TrustProxy:   cfg.TrustProxy,
 		Listing:      listingSvc,
+		Media:        mediaSvc,
 	})
 
 	return httpapi.Run(ctx, httpapi.ServerConfig{
