@@ -34,6 +34,13 @@ type Config struct {
 	AccessTTL   time.Duration
 	RefreshTTL  time.Duration
 	SMSProvider string
+
+	OTPMaxAttempts int
+	OTPWindow      time.Duration
+	OTPMaxPerPhone int
+	OTPMaxPerIp    int
+	SessionMaxAge  time.Duration
+	TrustProxy     bool
 }
 
 func (c Config) IsProduction() bool {
@@ -136,6 +143,13 @@ func Load() (Config, error) {
 		AccessTTL:   l.duration("SPACE_ACCESS_TTL", 15*time.Minute),
 		RefreshTTL:  l.duration("SPACE_REFRESH_TTL", 720*time.Hour),
 		SMSProvider: l.str("SPACE_SMS_PROVIDER", "log"),
+
+		OTPMaxAttempts: l.int("SPACE_OTP_MAX_ATTEMPTS", 5),
+		OTPWindow:      l.duration("SPACE_OTP_WINDOW", 15*time.Minute),
+		OTPMaxPerPhone: l.int("SPACE_OTP_MAX_PER_PHONE", 3),
+		OTPMaxPerIp:    l.int("SPACE_OTP_MAX_PER_IP", 15),
+		SessionMaxAge:  l.duration("SPACEP_SESSION_MAX_AGE", 2160*time.Hour),
+		TrustProxy:     l.boolean("SPACE_TRUST_PROXY", false),
 	}
 
 	var problems []string
@@ -155,4 +169,30 @@ func Load() (Config, error) {
 		problems = append(problems, "SPACE_SMS_PROVIDER=log writes OTP codes to the log and is refused in prod")
 	}
 	return cfg, nil
+}
+
+func (l *loader) int(key string, def int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		l.invalid = append(l.invalid, key)
+		return def
+	}
+	return n
+}
+
+func (l *loader) boolean(key string, def bool) bool {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		l.invalid = append(l.invalid, key)
+		return def
+	}
+	return b
 }

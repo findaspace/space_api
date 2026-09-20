@@ -11,3 +11,18 @@ sql:
         emit_interface: true
         emit_empty_slices: true
         emit_pointers_for_null_types: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: uuid
+            nullable: true
+            go_type: github.com/google/uuid.NullUUID
+          - db_type: timestamptz
+            go_type: time.Time
+          # - db_type: timestamptz
+          #   nullable: true
+          #   go_type: time.Time
+          #     import: time
+          #     package: time
+          #     type: Time
+          #     pointer: true
