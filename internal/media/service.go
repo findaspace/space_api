@@ -89,8 +89,9 @@ func (s *Service) RequestUpload(ctx context.Context, spaceID, hostID uuid.UUID, 
 	return Upload{Media: m, URL: url, ExpiresAt: expires, MaxBytes: s.cfg.MaxBytes}, nil
 }
 
-// Confirm verifies the upload landed, then rewrites the image. The rewrite is
-// what removes EXIF, so it happens before the row is ever marked ready.
+// Confirm verifies the upload landed and hands the pixel work to the worker.
+// Verification is synchronous because it is one HEAD and its failure is
+// actionable; the decode and re-encode are not.
 func (s *Service) Confirm(ctx context.Context, spaceID, mediaID, hostID uuid.UUID) (Media, error) {
 	if err := s.spaces.AssertHostOwns(ctx, spaceID, hostID); err != nil {
 		return Media{}, err
@@ -102,7 +103,7 @@ func (s *Service) Confirm(ctx context.Context, spaceID, mediaID, hostID uuid.UUI
 	}
 	if m.Status == StatusReady {
 		m.URL = s.objects.PublicURL(m.ObjectKey)
-		return m, nil // idempotent: a retried confirm is not an error
+		return m, nil
 	}
 
 	info, err := s.objects.Head(ctx, m.ObjectKey)
@@ -114,31 +115,71 @@ func (s *Service) Confirm(ctx context.Context, spaceID, mediaID, hostID uuid.UUI
 		return Media{}, ErrSizeMismatch
 	}
 
+	if err := s.jobs.Insert(ctx, jobs.ProcessMediaArgs{
+		MediaID: m.ID, SpaceID: spaceID,
+	}); err != nil {
+		return Media{}, err
+	}
+	return m, nil
+}
+
+// Process is the worker half: download, strip metadata, downscale, re-upload.
+// Still the security control it always was; only the timing changed.
+func (s *Service) Process(ctx context.Context, spaceID, mediaID uuid.UUID) error {
+	m, err := s.store.Get(ctx, mediaID, spaceID)
+	if err != nil {
+		return err
+	}
+	if m.Status == StatusReady {
+		return nil // a retried job is not an error
+	}
+
 	body, err := s.objects.Get(ctx, m.ObjectKey)
 	if err != nil {
-		return Media{}, ErrNotUploaded
+		return ErrNotUploaded
 	}
 	defer body.Close()
 
 	norm, err := Normalize(body, m.ContentType, s.cfg.MaxBytes)
 	if err != nil {
+		// A corrupt image will never decode, so retrying wastes attempts.
+		// Mark it failed and return nil so River stops.
 		_ = s.objects.Delete(ctx, m.ObjectKey)
-		return Media{}, err
+		if markErr := s.store.MarkFailed(ctx, mediaID, spaceID, err.Error()); markErr != nil {
+			return markErr
+		}
+		return nil
 	}
 
-	// Immutable key, so a year-long cache lifetime is safe: edits create a new
-	// media row with a new key rather than overwriting this one.
-	if err := s.objects.Put(ctx, m.ObjectKey, norm.ContentType, norm.Data, "public, max-age=31536000, immutable"); err != nil {
-		return Media{}, err
+	if err := s.objects.Put(ctx, m.ObjectKey, norm.ContentType, norm.Data,
+		"public, max-age=31536000, immutable"); err != nil {
+		return err
 	}
 
-	out, err := s.store.MarkReady(ctx, mediaID, spaceID, m.ObjectKey, norm.ContentType,
+	_, err = s.store.MarkReady(ctx, mediaID, spaceID, m.ObjectKey, norm.ContentType,
 		int64(len(norm.Data)), norm.Width, norm.Height)
+	return err
+}
+
+// SweepAbandoned removes uploads that were requested and never confirmed. Each
+// one holds a row and possibly an object nobody will ever look at.
+func (s *Service) SweepAbandoned(ctx context.Context, olderThan time.Duration) (int, error) {
+	stale, err := s.store.Abandoned(ctx, olderThan, 200)
 	if err != nil {
-		return Media{}, err
+		return 0, err
 	}
-	out.URL = s.objects.PublicURL(out.ObjectKey)
-	return out, nil
+
+	removed := 0
+	for _, m := range stale {
+		if _, err := s.store.Delete(ctx, m.ID, m.SpaceID); err != nil {
+			s.log.WarnContext(ctx, "could not delete abandoned media row",
+				slog.String("media_id", m.ID.String()), slog.Any("error", err))
+			continue
+		}
+		_ = s.objects.Delete(ctx, m.ObjectKey)
+		removed++
+	}
+	return removed, nil
 }
 
 func (s *Service) ForSpace(ctx context.Context, spaceID uuid.UUID) ([]Media, error) {

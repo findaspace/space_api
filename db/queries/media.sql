@@ -35,3 +35,15 @@ RETURNING object_key;
 
 -- name: SetMediaPosition :exec
 UPDATE space_media SET position = @position WHERE id = @id AND space_id = @space_id;
+
+
+-- name: MarkMediaFailed :exec
+UPDATE space_media
+SET status = 'failed', failure_reason = @failure_reason, attempts = attempts + 1
+WHERE id = @id AND space_id = @space_id;
+
+-- name: ListAbandonedMedia :many
+SELECT * FROM space_media
+WHERE status = 'pending' AND created_at < now() - @older_than::interval
+ORDER BY created_at
+LIMIT @row_limit;

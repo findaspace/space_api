@@ -12,6 +12,7 @@ import (
 	"github.com/samnart1/space_api/internal/listing"
 	"github.com/samnart1/space_api/internal/media"
 	"github.com/samnart1/space_api/internal/payment"
+	"github.com/samnart1/space_api/internal/payout"
 )
 
 type Deps struct {
@@ -29,6 +30,7 @@ type Deps struct {
 	Calendar     *calendar.Service
 	Booking      *booking.Service
 	Payment      *payment.Service
+	Payout       *payout.Service
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -68,6 +70,16 @@ func NewRouter(d Deps) http.Handler {
 
 	mux.Handle("POST /v1/spaces/{id}/publish",
 		Chain(http.HandlerFunc(lh.publish), authed, RequireRole(identity.RoleAdmin)))
+
+	poh := payoutHandler{svc: d.Payout}
+	hostOnly := func(h http.HandlerFunc) http.Handler {
+		return Chain(h, authed, RequireRole(identity.RoleHost))
+	}
+
+	mux.Handle("PUT /v1/payouts/account", hostOnly(poh.saveAccount))
+	mux.Handle("GET /v1/payouts/balance", hostOnly(poh.balance))
+	mux.Handle("GET /v1/payouts", hostOnly(poh.list))
+	mux.Handle("POST /v1/payouts", hostOnly(poh.request))
 
 	mux.Handle("GET /healthz", handleLive(d.Version, d.Commit))
 	mux.Handle("GET /readyz", handleReady(d.Pool, d.PingTimeout))

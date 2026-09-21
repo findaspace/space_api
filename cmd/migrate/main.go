@@ -11,6 +11,9 @@ import (
 	"github.com/samnart1/space_api/db"
 	"github.com/samnart1/space_api/internal/config"
 	"github.com/samnart1/space_api/internal/platform/postgres"
+
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivermigrate"
 )
 
 func main() {
@@ -44,6 +47,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
+	riverMigrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
+	if err != nil {
+		return fmt.Errorf("river migrator: %w", err)
+	}
+	if _, err := riverMigrator.Migrate(ctx, rivermigrate.DirectionUp, nil); err != nil {
+		return fmt.Errorf("river migrate: %w", err)
+	}
+	fmt.Println("river schema up to date")
 
 	version, err := postgres.Migrate(ctx, pool, fsys)
 	if err != nil {

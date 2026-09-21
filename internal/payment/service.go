@@ -2,6 +2,7 @@ package payment
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -26,13 +27,20 @@ type ServiceConfig struct {
 }
 
 type Service struct {
-	store    *Store
-	client   *paystack.Client
-	bookings BookingGateway
-	payers   PayerSource
-	log      *slog.Logger
-	cfg      ServiceConfig
+	store     *Store
+	client    *paystack.Client
+	bookings  BookingGateway
+	payers    PayerSource
+	log       *slog.Logger
+	cfg       ServiceConfig
+	transfers TransferHandler
 }
+
+type TransferHandler interface {
+	HandleTransfer(ctx context.Context, tx pgx.Tx, event string, t paystack.Transfer) error
+}
+
+func (s *Service) SetTransferHandler(h TransferHandler) { s.transfers = h }
 
 func NewService(store *Store, client *paystack.Client, bookings BookingGateway,
 	payers PayerSource, log *slog.Logger, cfg ServiceConfig) *Service {
@@ -112,9 +120,11 @@ func (s *Service) HandleWebhook(ctx context.Context, rawBody []byte, signature s
 		return err
 	}
 
-	// Paystack's transaction id is stable across redeliveries; the reference
-	// alone is not, since one reference can produce several event types.
-	key := fmt.Sprintf("%s:%d", event.Event, event.Data.ID)
+	var idOnly struct {
+		ID int64 `json:"id"`
+	}
+	_ = json.Unmarshal(event.Data, &idOnly)
+	key := fmt.Sprintf("%s:%d", event.Event, idOnly.ID)
 
 	return postgres.InTx(ctx, s.store.Pool(), func(tx pgx.Tx) error {
 		fresh, err := s.store.RecordEventTx(ctx, tx, key, event.Event, rawBody)
@@ -127,14 +137,32 @@ func (s *Service) HandleWebhook(ctx context.Context, rawBody []byte, signature s
 		}
 
 		switch event.Event {
-		case "charge.success":
-			if err := s.applyChargeSuccess(ctx, tx, event.Data); err != nil {
+		case "charge.success", "charge.failed":
+			txn, err := event.Transaction()
+			if err != nil {
 				return err
 			}
-		case "charge.failed":
-			if err := s.applyChargeFailed(ctx, tx, event.Data); err != nil {
+			if event.Event == "charge.success" {
+				if err := s.applyChargeSuccess(ctx, tx, txn); err != nil {
+					return err
+				}
+			} else if err := s.applyChargeFailed(ctx, tx, txn); err != nil {
 				return err
 			}
+
+		case "transfer.success", "transfer.failed", "transfer.reversed":
+			if s.transfers == nil {
+				s.log.WarnContext(ctx, "no transfer handler registered")
+				break
+			}
+			tr, err := event.Transfer()
+			if err != nil {
+				return err
+			}
+			if err := s.transfers.HandleTransfer(ctx, tx, event.Event, tr); err != nil {
+				return err
+			}
+
 		default:
 			s.log.InfoContext(ctx, "ignoring webhook event", slog.String("event", event.Event))
 		}

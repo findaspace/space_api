@@ -23,6 +23,71 @@ type Client struct {
 	base   string
 }
 
+type Transfer struct {
+	ID            int64      `json:"id"`
+	Reference     string     `json:"reference"`
+	TransferCode  string     `json:"transfer_code"`
+	Status        string     `json:"status"`
+	AmountMinor   int64      `json:"amount"`
+	Currency      string     `json:"currency"`
+	Reason        string     `json:"reason"`
+	FailureReason string     `json:"failure_reason"`
+	CreatedAt     *time.Time `json:"createdAt"`
+}
+
+type RecipientRequest struct {
+	Type          string `json:"type"` // mobile_money, nuban, ghipss
+	Name          string `json:"name"`
+	AccountNumber string `json:"account_number"`
+	BankCode      string `json:"bank_code"`
+	Currency      string `json:"currency"`
+}
+
+type Recipient struct {
+	ID            int64  `json:"id"`
+	RecipientCode string `json:"recipient_code"`
+	Active        bool   `json:"active"`
+}
+
+func (c *Client) CreateRecipient(ctx context.Context, in RecipientRequest) (Recipient, error) {
+	var out Recipient
+	if err := c.do(ctx, http.MethodPost, "/transferrecipient", in, &out); err != nil {
+		return Recipient{}, err
+	}
+	return out, nil
+}
+
+type TransferRequest struct {
+	Source      string `json:"source"` // always "balance"
+	AmountMinor int64  `json:"amount"`
+	Recipient   string `json:"recipient"`
+	Reason      string `json:"reason,omitempty"`
+	Reference   string `json:"reference,omitempty"`
+	Currency    string `json:"currency,omitempty"`
+}
+
+// InitiateTransfer queues a payout. Retrying with the same Reference is safe
+// and is the documented way to recover from a failed request: Paystack treats
+// it as the same transfer rather than a second credit.
+func (c *Client) InitiateTransfer(ctx context.Context, in TransferRequest) (Transfer, error) {
+	in.Source = "balance"
+	var out Transfer
+	if err := c.do(ctx, http.MethodPost, "/transfer", in, &out); err != nil {
+		return Transfer{}, err
+	}
+	return out, nil
+}
+
+// VerifyTransfer re-reads a transfer. Used by reconciliation for payouts stuck
+// in processing: Paystack retries internally and may take minutes to resolve.
+func (c *Client) VerifyTransfer(ctx context.Context, reference string) (Transfer, error) {
+	var out Transfer
+	if err := c.do(ctx, http.MethodGet, "/transfer/verify/"+reference, nil, &out); err != nil {
+		return Transfer{}, err
+	}
+	return out, nil
+}
+
 func New(secret, baseURL string, timeout time.Duration) *Client {
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
@@ -173,8 +238,24 @@ func VerifySignature(secret string, rawBody []byte, signature string) bool {
 }
 
 type Event struct {
-	Event string      `json:"event"`
-	Data  Transaction `json:"data"`
+	Event string          `json:"event"`
+	Data  json.RawMessage `json:"data"`
+}
+
+func (e Event) Transaction() (Transaction, error) {
+	var t Transaction
+	if err := json.Unmarshal(e.Data, &t); err != nil {
+		return Transaction{}, fmt.Errorf("decode transaction: %w", err)
+	}
+	return t, nil
+}
+
+func (e Event) Transfer() (Transfer, error) {
+	var t Transfer
+	if err := json.Unmarshal(e.Data, &t); err != nil {
+		return Transfer{}, fmt.Errorf("decode transfer: %w", err)
+	}
+	return t, nil
 }
 
 func ParseEvent(rawBody []byte) (Event, error) {

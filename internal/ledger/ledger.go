@@ -201,3 +201,19 @@ func SplitRefund(refundMinor, feeMinor int64, hostAtFault bool) (fromHost, fromP
 	}
 	return refundMinor - feeMinor, feeMinor
 }
+
+// PayoutReversed undoes a payout the processor could not deliver. Paystack
+// credits our balance back, so the host is owed the money again.
+//
+//	DR psp_clearing   amount
+//	CR host_payable   amount
+func PayoutReversed(hostID uuid.UUID, currency, ref string, amountMinor int64) Posting {
+	return Posting{
+		Kind: KindReversal, Currency: currency, ExternalRef: ref,
+		Memo: "payout reversed",
+		Entries: []Entry{
+			{Account: AccountPSPClearing, Direction: Debit, Amount: amountMinor},
+			{Account: AccountHostPayable, Direction: Credit, Amount: amountMinor, PartyID: party(hostID)},
+		},
+	}
+}

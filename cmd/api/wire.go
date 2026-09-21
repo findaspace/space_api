@@ -19,6 +19,20 @@ type spaceSource struct{ listings *listing.Service }
 
 type bookingGateway struct{ bookings *booking.Service }
 
+type hostSource struct{ identity *identity.Service }
+
+func (h hostSource) DisplayNameFor(ctx context.Context, userID uuid.UUID) (string, string, error) {
+	u, err := h.identity.Me(ctx, userID)
+	if err != nil {
+		return "", "", err
+	}
+	name := u.DisplayName
+	if name == "" {
+		name = "Space Host"
+	}
+	return name, u.Phone, nil
+}
+
 func (g bookingGateway) Snapshot(ctx context.Context, id uuid.UUID) (payment.Snapshot, error) {
 	b, err := g.bookings.ByID(ctx, id)
 	if err != nil {

@@ -105,7 +105,33 @@ func TestParseEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Event != "charge.success" || e.Data.AmountMinor != 100000 || e.Data.Channel != "mobile_money" {
-		t.Errorf("event = %+v", e)
+	if e.Event != "charge.success" {
+		t.Fatalf("event = %q", e.Event)
+	}
+
+	txn, err := e.Transaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if txn.AmountMinor != 100000 || txn.Channel != "mobile_money" {
+		t.Errorf("transaction = %+v", txn)
+	}
+}
+
+// The same envelope decodes as a transfer when the event says so.
+func TestParseTransferEvent(t *testing.T) {
+	e, err := ParseEvent([]byte(`{"event":"transfer.success","data":{
+		"id":9100,"reference":"pot-1","transfer_code":"TRF_x",
+		"status":"success","amount":1000000,"currency":"GHS"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tr, err := e.Transfer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.TransferCode != "TRF_x" || tr.AmountMinor != 1000000 {
+		t.Errorf("transfer = %+v", tr)
 	}
 }

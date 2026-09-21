@@ -61,6 +61,8 @@ type Config struct {
 	PaystackBaseURL     string
 	PaystackCallbackURL string
 	PaystackTimeout     time.Duration
+
+	PayoutHoldDays int
 }
 
 func (c Config) IsProduction() bool {
@@ -203,6 +205,7 @@ func Load() (Config, error) {
 		PaystackBaseURL:     l.str("SPACE_PAYSTACK_BASE_URL", "https://api.paystack.co"),
 		PaystackCallbackURL: l.str("SPACE_PAYSTACK_CALLBACK_URL", ""),
 		PaystackTimeout:     l.duration("SPACE_PAYSTACK_TIMEOUT", 20*time.Second),
+		PayoutHoldDays:      l.int("SPACE_PAYOUT_HOLD_DAYS", 2),
 	}
 
 	var problems []string

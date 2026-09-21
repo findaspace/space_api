@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -144,4 +145,27 @@ func (s *Store) Reorder(ctx context.Context, spaceID uuid.UUID, ids []uuid.UUID)
 		}
 		return nil
 	})
+}
+
+func (s *Store) MarkFailed(ctx context.Context, id, spaceID uuid.UUID, reason string) error {
+	if err := s.q.MarkMediaFailed(ctx, dbgen.MarkMediaFailedParams{
+		ID: id, SpaceID: spaceID, FailureReason: reason,
+	}); err != nil {
+		return fmt.Errorf("mark media failed: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) Abandoned(ctx context.Context, olderThan time.Duration, limit int32) ([]Media, error) {
+	rows, err := s.q.ListAbandonedMedia(ctx, dbgen.ListAbandonedMediaParams{
+		OlderThan: olderThan, RowLimit: limit,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list abandoned media: %w", err)
+	}
+	out := make([]Media, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toDomain(row))
+	}
+	return out, nil
 }

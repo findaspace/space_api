@@ -1,0 +1,29 @@
+package jobs
+
+import "github.com/google/uuid"
+
+// Kinds are stable strings stored in the database. Renaming one orphans every
+// queued job of that kind, so treat them like column names.
+
+type ProcessMediaArgs struct {
+	MediaID uuid.UUID `json:"media_id"`
+	SpaceID uuid.UUID `json:"space_id"`
+}
+
+func (ProcessMediaArgs) Kind() string { return "process_media" }
+
+type ExpireHoldsArgs struct{}
+
+func (ExpireHoldsArgs) Kind() string { return "expire_holds" }
+
+type ReconcilePayoutsArgs struct{}
+
+func (ReconcilePayoutsArgs) Kind() string { return "reconcile_payouts" }
+
+type SweepUploadsArgs struct{}
+
+func (SweepUploadsArgs) Kind() string { return "sweep_uploads" }
+
+type TrialBalanceArgs struct{}
+
+func (TrialBalanceArgs) Kind() string { return "trial_balance" }

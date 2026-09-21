@@ -13,9 +13,11 @@ import (
 	"github.com/samnart1/space_api/internal/calendar"
 	"github.com/samnart1/space_api/internal/config"
 	"github.com/samnart1/space_api/internal/identity"
+	"github.com/samnart1/space_api/internal/jobs"
 	"github.com/samnart1/space_api/internal/listing"
 	"github.com/samnart1/space_api/internal/media"
 	"github.com/samnart1/space_api/internal/payment"
+	"github.com/samnart1/space_api/internal/payout"
 	"github.com/samnart1/space_api/internal/platform/objectstore"
 	"github.com/samnart1/space_api/internal/platform/paystack"
 	"github.com/samnart1/space_api/internal/platform/postgres"
@@ -116,6 +118,12 @@ func run() error {
 
 	mediaStore := media.NewStore(pool)
 	listingSvc := listing.NewService(listing.NewStore(pool), identitySvc, mediaStore)
+
+	enqueuer, err := jobs.NewEnqueuer(pool)
+	if err != nil {
+		return err
+	}
+
 	mediaSvc := media.NewService(mediaStore, objects, listingSvc, media.ServiceConfig{
 		MaxBytes:    cfg.MediaMaxBytes,
 		MaxPerSpace: cfg.MediaMaxPerSpace,
@@ -145,6 +153,13 @@ func run() error {
 			Channels:    []string{"mobile_money", "card"},
 		})
 
+	payoutSvc := payout.NewService(
+		payout.NewStore(pool), paystackClient,
+		hostSource{identity: identitySvc}, log,
+		payout.ServiceConfig{HoldDays: cfg.PayoutHoldDays, Currency: "GHS"},
+	)
+	paymentSvc.SetTransferHandler(payoutSvc)
+
 	router := httpapi.NewRouter(httpapi.Deps{
 		Pool:         pool,
 		Logger:       log,
@@ -160,6 +175,7 @@ func run() error {
 		Calendar:     calendarSvc,
 		Booking:      bookingSvc,
 		Payment:      paymentSvc,
+		Payout:       payoutSvc,
 	})
 
 	log.Info("paystack configured",
