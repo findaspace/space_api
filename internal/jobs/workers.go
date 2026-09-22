@@ -9,8 +9,13 @@ import (
 	"github.com/riverqueue/river"
 )
 
-// The dependencies the workers need, declared as interfaces so this package
-// imports no domain package.
+// Everything the workers need, as interfaces, so this package imports no
+// domain package and cannot take part in an import cycle.
+
+type SearchIndexer interface {
+	RefreshStats(ctx context.Context) (int64, error)
+}
+
 type MediaProcessor interface {
 	Process(ctx context.Context, spaceID, mediaID uuid.UUID) error
 }
@@ -31,14 +36,30 @@ type LedgerAuditor interface {
 	TrialBalance(ctx context.Context) (int64, error)
 }
 
+type BookingAdvancer interface {
+	Advance(ctx context.Context) (started, completed int64, err error)
+}
+
+type ReviewRevealer interface {
+	RevealExpired(ctx context.Context) (int64, error)
+}
+
+type NotificationDeliverer interface {
+	Deliver(ctx context.Context, notificationID uuid.UUID) error
+}
+
 type Deps struct {
-	Media      MediaProcessor
-	Bookings   HoldExpirer
-	Payouts    PayoutReconciler
-	Uploads    UploadSweeper
-	Ledger     LedgerAuditor
-	Log        *slog.Logger
-	StuckAfter time.Duration
+	Media         MediaProcessor
+	Bookings      HoldExpirer
+	Payouts       PayoutReconciler
+	Uploads       UploadSweeper
+	Ledger        LedgerAuditor
+	Advancer      BookingAdvancer
+	Reviews       ReviewRevealer
+	Notifications NotificationDeliverer
+	Log           *slog.Logger
+	StuckAfter    time.Duration
+	Search        SearchIndexer
 }
 
 type ProcessMediaWorker struct {
@@ -50,14 +71,43 @@ func (w *ProcessMediaWorker) Work(ctx context.Context, job *river.Job[ProcessMed
 	return w.deps.Media.Process(ctx, job.Args.SpaceID, job.Args.MediaID)
 }
 
+type DeliverNotificationWorker struct {
+	river.WorkerDefaults[DeliverNotificationArgs]
+	deps Deps
+}
+
+func (w *DeliverNotificationWorker) Work(ctx context.Context, job *river.Job[DeliverNotificationArgs]) error {
+	return w.deps.Notifications.Deliver(ctx, job.Args.NotificationID)
+}
+
+type RefreshSearchStatsWorker struct {
+	river.WorkerDefaults[RefreshSearchStatsArgs]
+	deps Deps
+}
+
+func (w *RefreshSearchStatsWorker) Work(ctx context.Context, job *river.Job[RefreshSearchStatsArgs]) error {
+	n, err := w.deps.Search.RefreshStats(ctx)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		w.deps.Log.InfoContext(ctx, "refreshed search stats", slog.Int64("listings", n))
+	}
+	return nil
+}
+
+// NextRetry backs off quadratically: 30s, 2m, 4.5m, 8m. Paired with
+// MaxAttempts 5 at insert time, an SMS is abandoned within about 15 minutes
+// rather than arriving the next morning.
+func (w *DeliverNotificationWorker) NextRetry(job *river.Job[DeliverNotificationArgs]) time.Time {
+	return time.Now().Add(time.Duration(job.Attempt*job.Attempt) * 30 * time.Second)
+}
+
 type ExpireHoldsWorker struct {
 	river.WorkerDefaults[ExpireHoldsArgs]
 	deps Deps
 }
 
-// Hold expiry is already correct without this: Hold() sweeps lapsed rows before
-// inserting. This exists so a host's calendar stops showing a dead hold, not
-// for correctness.
 func (w *ExpireHoldsWorker) Work(ctx context.Context, job *river.Job[ExpireHoldsArgs]) error {
 	n, err := w.deps.Bookings.ExpireHolds(ctx)
 	if err != nil {
@@ -80,8 +130,7 @@ func (w *ReconcilePayoutsWorker) Work(ctx context.Context, job *river.Job[Reconc
 		return err
 	}
 	if n > 0 {
-		w.deps.Log.WarnContext(ctx, "resolved payouts a webhook never reported",
-			slog.Int("count", n))
+		w.deps.Log.WarnContext(ctx, "resolved payouts a webhook never reported", slog.Int("count", n))
 	}
 	return nil
 }
@@ -107,8 +156,6 @@ type TrialBalanceWorker struct {
 	deps Deps
 }
 
-// A non-zero trial balance means something wrote entries outside Post. It
-// should be impossible, which is exactly why it is worth checking hourly.
 func (w *TrialBalanceWorker) Work(ctx context.Context, job *river.Job[TrialBalanceArgs]) error {
 	net, err := w.deps.Ledger.TrialBalance(ctx)
 	if err != nil {
@@ -120,35 +167,71 @@ func (w *TrialBalanceWorker) Work(ctx context.Context, job *river.Job[TrialBalan
 	return nil
 }
 
+type AdvanceBookingsWorker struct {
+	river.WorkerDefaults[AdvanceBookingsArgs]
+	deps Deps
+}
+
+func (w *AdvanceBookingsWorker) Work(ctx context.Context, job *river.Job[AdvanceBookingsArgs]) error {
+	started, completed, err := w.deps.Advancer.Advance(ctx)
+	if err != nil {
+		return err
+	}
+	if started+completed > 0 {
+		w.deps.Log.InfoContext(ctx, "advanced bookings",
+			slog.Int64("leases_started", started), slog.Int64("stays_completed", completed))
+	}
+	return nil
+}
+
+type RevealReviewsWorker struct {
+	river.WorkerDefaults[RevealReviewsArgs]
+	deps Deps
+}
+
+func (w *RevealReviewsWorker) Work(ctx context.Context, job *river.Job[RevealReviewsArgs]) error {
+	n, err := w.deps.Reviews.RevealExpired(ctx)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		w.deps.Log.InfoContext(ctx, "revealed reviews past their window", slog.Int64("count", n))
+	}
+	return nil
+}
+
 func Register(deps Deps) (*river.Workers, error) {
 	workers := river.NewWorkers()
 
 	river.AddWorker(workers, &ProcessMediaWorker{deps: deps})
+	river.AddWorker(workers, &DeliverNotificationWorker{deps: deps})
 	river.AddWorker(workers, &ExpireHoldsWorker{deps: deps})
 	river.AddWorker(workers, &ReconcilePayoutsWorker{deps: deps})
 	river.AddWorker(workers, &SweepUploadsWorker{deps: deps})
 	river.AddWorker(workers, &TrialBalanceWorker{deps: deps})
+	river.AddWorker(workers, &AdvanceBookingsWorker{deps: deps})
+	river.AddWorker(workers, &RevealReviewsWorker{deps: deps})
+	river.AddWorker(workers, &RefreshSearchStatsWorker{deps: deps})
 
 	return workers, nil
 }
 
 // Periodic returns the schedule. River elects one client as leader, so with
-// three worker replicas these still run once each interval, not three times.
+// several worker replicas each job still runs once per interval.
 func Periodic() []*river.PeriodicJob {
+	every := func(d time.Duration, args river.JobArgs, onStart bool) *river.PeriodicJob {
+		return river.NewPeriodicJob(river.PeriodicInterval(d),
+			func() (river.JobArgs, *river.InsertOpts) { return args, nil },
+			&river.PeriodicJobOpts{RunOnStart: onStart})
+	}
+
 	return []*river.PeriodicJob{
-		river.NewPeriodicJob(river.PeriodicInterval(5*time.Minute),
-			func() (river.JobArgs, *river.InsertOpts) { return ExpireHoldsArgs{}, nil },
-			&river.PeriodicJobOpts{RunOnStart: true}),
-
-		river.NewPeriodicJob(river.PeriodicInterval(10*time.Minute),
-			func() (river.JobArgs, *river.InsertOpts) { return ReconcilePayoutsArgs{}, nil },
-			&river.PeriodicJobOpts{RunOnStart: true}),
-
-		river.NewPeriodicJob(river.PeriodicInterval(time.Hour),
-			func() (river.JobArgs, *river.InsertOpts) { return SweepUploadsArgs{}, nil }, nil),
-
-		river.NewPeriodicJob(river.PeriodicInterval(time.Hour),
-			func() (river.JobArgs, *river.InsertOpts) { return TrialBalanceArgs{}, nil },
-			&river.PeriodicJobOpts{RunOnStart: true}),
+		every(5*time.Minute, ExpireHoldsArgs{}, true),
+		every(10*time.Minute, ReconcilePayoutsArgs{}, true),
+		every(time.Hour, SweepUploadsArgs{}, false),
+		every(time.Hour, TrialBalanceArgs{}, true),
+		every(time.Hour, AdvanceBookingsArgs{}, true),
+		every(6*time.Hour, RevealReviewsArgs{}, false),
+		every(5*time.Minute, RefreshSearchStatsArgs{}, true),
 	}
 }

@@ -16,6 +16,8 @@ import (
 	"github.com/samnart1/space_api/internal/jobs"
 	"github.com/samnart1/space_api/internal/listing"
 	"github.com/samnart1/space_api/internal/media"
+	"github.com/samnart1/space_api/internal/messaging"
+	"github.com/samnart1/space_api/internal/notify"
 	"github.com/samnart1/space_api/internal/payment"
 	"github.com/samnart1/space_api/internal/payout"
 	"github.com/samnart1/space_api/internal/platform/objectstore"
@@ -23,6 +25,8 @@ import (
 	"github.com/samnart1/space_api/internal/platform/postgres"
 	"github.com/samnart1/space_api/internal/platform/sms"
 	"github.com/samnart1/space_api/internal/platform/telemetry"
+	"github.com/samnart1/space_api/internal/review"
+	"github.com/samnart1/space_api/internal/search"
 	"github.com/samnart1/space_api/internal/transport/httpapi"
 )
 
@@ -124,7 +128,7 @@ func run() error {
 		return err
 	}
 
-	mediaSvc := media.NewService(mediaStore, objects, listingSvc, media.ServiceConfig{
+	mediaSvc := media.NewService(mediaStore, objects, listingSvc, enqueuer, log, media.ServiceConfig{
 		MaxBytes:    cfg.MediaMaxBytes,
 		MaxPerSpace: cfg.MediaMaxPerSpace,
 	})
@@ -160,6 +164,17 @@ func run() error {
 	)
 	paymentSvc.SetTransferHandler(payoutSvc)
 
+	messagingSvc := messaging.NewService(messaging.NewStore(pool), listingSvc)
+	reviewSvc := review.NewService(review.NewStore(pool))
+
+	notifySvc := notify.NewService(notify.NewStore(pool), enqueuer, sender,
+		phoneSource{identity: identitySvc}, log)
+
+	paymentSvc.SetNotifier(notifySvc)
+	payoutSvc.SetNotifier(notifySvc)
+
+	searchSvc := search.NewService(search.NewStore(pool), objects)
+
 	router := httpapi.NewRouter(httpapi.Deps{
 		Pool:         pool,
 		Logger:       log,
@@ -176,6 +191,10 @@ func run() error {
 		Booking:      bookingSvc,
 		Payment:      paymentSvc,
 		Payout:       payoutSvc,
+		Messaging:    messagingSvc,
+		Review:       reviewSvc,
+		Notify:       notifySvc,
+		Search:       searchSvc,
 	})
 
 	log.Info("paystack configured",

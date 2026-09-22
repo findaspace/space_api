@@ -7,12 +7,14 @@ package dbgen
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 const countMedia = `-- name: CountMedia :one
-SELECT count(*) FROM space_media WHERE space_id = $1
+SELECT count(*) FROM space_media 
+WHERE space_id = $1 AND status <> 'failed'
 `
 
 func (q *Queries) CountMedia(ctx context.Context, spaceID uuid.UUID) (int64, error) {
@@ -36,7 +38,7 @@ func (q *Queries) CountReadyMedia(ctx context.Context, spaceID uuid.UUID) (int64
 const createMedia = `-- name: CreateMedia :one
 INSERT INTO space_media (id, space_id, object_key, content_type, position)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, space_id, object_key, content_type, byte_size, width, height, position, status, created_at, ready_at
+RETURNING id, space_id, object_key, content_type, byte_size, width, height, position, status, created_at, ready_at, failure_reason, attempts
 `
 
 type CreateMediaParams struct {
@@ -68,6 +70,8 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Space
 		&i.Status,
 		&i.CreatedAt,
 		&i.ReadyAt,
+		&i.FailureReason,
+		&i.Attempts,
 	)
 	return i, err
 }
@@ -90,7 +94,7 @@ func (q *Queries) DeleteMedia(ctx context.Context, arg DeleteMediaParams) (strin
 }
 
 const getMedia = `-- name: GetMedia :one
-SELECT id, space_id, object_key, content_type, byte_size, width, height, position, status, created_at, ready_at FROM space_media WHERE id = $1 AND space_id = $2
+SELECT id, space_id, object_key, content_type, byte_size, width, height, position, status, created_at, ready_at, failure_reason, attempts FROM space_media WHERE id = $1 AND space_id = $2
 `
 
 type GetMediaParams struct {
@@ -113,12 +117,61 @@ func (q *Queries) GetMedia(ctx context.Context, arg GetMediaParams) (SpaceMedium
 		&i.Status,
 		&i.CreatedAt,
 		&i.ReadyAt,
+		&i.FailureReason,
+		&i.Attempts,
 	)
 	return i, err
 }
 
+const listAbandonedMedia = `-- name: ListAbandonedMedia :many
+SELECT id, space_id, object_key, content_type, byte_size, width, height, position, status, created_at, ready_at, failure_reason, attempts FROM space_media
+WHERE (status = 'pending' AND created_at < $1)
+	OR (status = 'failed' AND created_at < $1)
+ORDER BY created_at
+LIMIT $2
+`
+
+type ListAbandonedMediaParams struct {
+	Cutoff   time.Time
+	RowLimit int32
+}
+
+func (q *Queries) ListAbandonedMedia(ctx context.Context, arg ListAbandonedMediaParams) ([]SpaceMedium, error) {
+	rows, err := q.db.Query(ctx, listAbandonedMedia, arg.Cutoff, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SpaceMedium{}
+	for rows.Next() {
+		var i SpaceMedium
+		if err := rows.Scan(
+			&i.ID,
+			&i.SpaceID,
+			&i.ObjectKey,
+			&i.ContentType,
+			&i.ByteSize,
+			&i.Width,
+			&i.Height,
+			&i.Position,
+			&i.Status,
+			&i.CreatedAt,
+			&i.ReadyAt,
+			&i.FailureReason,
+			&i.Attempts,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMedia = `-- name: ListMedia :many
-SELECT id, space_id, object_key, content_type, byte_size, width, height, position, status, created_at, ready_at FROM space_media
+SELECT id, space_id, object_key, content_type, byte_size, width, height, position, status, created_at, ready_at, failure_reason, attempts FROM space_media
 WHERE space_id = $1 AND status = 'ready'
 ORDER BY position, created_at
 `
@@ -144,6 +197,8 @@ func (q *Queries) ListMedia(ctx context.Context, spaceID uuid.UUID) ([]SpaceMedi
 			&i.Status,
 			&i.CreatedAt,
 			&i.ReadyAt,
+			&i.FailureReason,
+			&i.Attempts,
 		); err != nil {
 			return nil, err
 		}
@@ -155,12 +210,29 @@ func (q *Queries) ListMedia(ctx context.Context, spaceID uuid.UUID) ([]SpaceMedi
 	return items, nil
 }
 
+const markMediaFailed = `-- name: MarkMediaFailed :exec
+UPDATE space_media
+SET status = 'failed', failure_reason = $1, attempts = attempts + 1
+WHERE id = $2 AND space_id = $3
+`
+
+type MarkMediaFailedParams struct {
+	FailureReason string
+	ID            uuid.UUID
+	SpaceID       uuid.UUID
+}
+
+func (q *Queries) MarkMediaFailed(ctx context.Context, arg MarkMediaFailedParams) error {
+	_, err := q.db.Exec(ctx, markMediaFailed, arg.FailureReason, arg.ID, arg.SpaceID)
+	return err
+}
+
 const markMediaReady = `-- name: MarkMediaReady :one
 UPDATE space_media
 SET status = 'ready', byte_size = $1, width = $2, height = $3,
     object_key = $4, content_type = $5, ready_at = now()
 WHERE id = $6 AND space_id = $7
-RETURNING id, space_id, object_key, content_type, byte_size, width, height, position, status, created_at, ready_at
+RETURNING id, space_id, object_key, content_type, byte_size, width, height, position, status, created_at, ready_at, failure_reason, attempts
 `
 
 type MarkMediaReadyParams struct {
@@ -196,6 +268,8 @@ func (q *Queries) MarkMediaReady(ctx context.Context, arg MarkMediaReadyParams) 
 		&i.Status,
 		&i.CreatedAt,
 		&i.ReadyAt,
+		&i.FailureReason,
+		&i.Attempts,
 	)
 	return i, err
 }

@@ -12,12 +12,23 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/samnart1/space_api/internal/ledger"
+	"github.com/samnart1/space_api/internal/notify"
 	"github.com/samnart1/space_api/internal/platform/paystack"
 	"github.com/samnart1/space_api/internal/platform/postgres"
 )
 
 type PayerSource interface {
 	ContactFor(ctx context.Context, userID uuid.UUID) (email, phone string, err error)
+}
+
+// TransferHandler receives transfer events. Declared here because webhook
+// verification and deduplication live in this package; payouts plug into it.
+type TransferHandler interface {
+	HandleTransfer(ctx context.Context, tx pgx.Tx, event string, t paystack.Transfer) error
+}
+
+type Notifier interface {
+	NotifyTx(ctx context.Context, tx pgx.Tx, e notify.Event) error
 }
 
 type ServiceConfig struct {
@@ -31,22 +42,23 @@ type Service struct {
 	client    *paystack.Client
 	bookings  BookingGateway
 	payers    PayerSource
+	transfers TransferHandler
+	notifier  Notifier
 	log       *slog.Logger
 	cfg       ServiceConfig
-	transfers TransferHandler
 }
-
-type TransferHandler interface {
-	HandleTransfer(ctx context.Context, tx pgx.Tx, event string, t paystack.Transfer) error
-}
-
-func (s *Service) SetTransferHandler(h TransferHandler) { s.transfers = h }
 
 func NewService(store *Store, client *paystack.Client, bookings BookingGateway,
 	payers PayerSource, log *slog.Logger, cfg ServiceConfig) *Service {
 	return &Service{store: store, client: client, bookings: bookings,
 		payers: payers, log: log, cfg: cfg}
 }
+
+// The two setters exist because payouts and notifications both depend on
+// packages that depend back on this one's webhook path. One side of each pair
+// has to be wired late; doing it explicitly beats a shared package.
+func (s *Service) SetTransferHandler(h TransferHandler) { s.transfers = h }
+func (s *Service) SetNotifier(n Notifier)               { s.notifier = n }
 
 // Intent starts a payment for a booking and returns where to send the guest.
 func (s *Service) Intent(ctx context.Context, bookingID, guestID uuid.UUID) (Payment, error) {
@@ -69,9 +81,7 @@ func (s *Service) Intent(ctx context.Context, bookingID, guestID uuid.UUID) (Pay
 	if err != nil {
 		return Payment{}, err
 	}
-	// Paystack requires an email; this product identifies people by phone. A
-	// synthesized address keeps the integration working without pretending we
-	// have contact details we do not have.
+	// Paystack requires an email; this product identifies people by phone.
 	if email == "" {
 		email = strings.TrimPrefix(phone, "+") + "@guest.space.gh"
 	}
@@ -120,6 +130,8 @@ func (s *Service) HandleWebhook(ctx context.Context, rawBody []byte, signature s
 		return err
 	}
 
+	// Charges and transfers both carry a stable numeric id; pull it without
+	// committing to either shape.
 	var idOnly struct {
 		ID int64 `json:"id"`
 	}
@@ -214,7 +226,35 @@ func (s *Service) applyChargeSuccess(ctx context.Context, tx pgx.Tx, txn paystac
 		return err
 	}
 
-	return s.bookings.MarkPaid(ctx, tx, p.BookingID, snap.Status)
+	if err := s.bookings.MarkPaid(ctx, tx, p.BookingID, snap.Status); err != nil {
+		return err
+	}
+
+	return s.notifyConfirmed(ctx, tx, snap, p.AmountMinor)
+}
+
+// notifyConfirmed raises both sides' notices inside the webhook transaction, so
+// a confirmed booking can never exist without them and a rolled-back payment
+// leaves no ghost notice behind.
+func (s *Service) notifyConfirmed(ctx context.Context, tx pgx.Tx, snap Snapshot, paidMinor int64) error {
+	if s.notifier == nil {
+		return nil
+	}
+	data := map[string]any{"booking_id": snap.ID.String()}
+
+	guest := notify.BookingConfirmedGuest(snap.Reference, snap.StartsOn, paidMinor)
+	guest.UserID = snap.GuestID
+	guest.Key = "booking.confirmed:" + snap.ID.String() + ":guest"
+	guest.Data = data
+	if err := s.notifier.NotifyTx(ctx, tx, guest); err != nil {
+		return err
+	}
+
+	host := notify.BookingConfirmedHost(snap.Reference, snap.StartsOn)
+	host.UserID = snap.HostID
+	host.Key = "booking.confirmed:" + snap.ID.String() + ":host"
+	host.Data = data
+	return s.notifier.NotifyTx(ctx, tx, host)
 }
 
 func (s *Service) applyChargeFailed(ctx context.Context, tx pgx.Tx, txn paystack.Transaction) error {
@@ -223,8 +263,7 @@ func (s *Service) applyChargeFailed(ctx context.Context, tx pgx.Tx, txn paystack
 		return err
 	}
 	if p.Status == StatusSucceeded {
-		// A failure after a success is noise, never a reversal.
-		return nil
+		return nil // a failure after a success is noise, never a reversal
 	}
 	reason := txn.GatewayResponse
 	if reason == "" {

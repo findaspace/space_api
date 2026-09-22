@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/samnart1/space_api/internal/jobs"
 	"github.com/samnart1/space_api/internal/platform/objectstore"
 )
 
@@ -34,11 +36,13 @@ type Service struct {
 	store   *Store
 	objects ObjectStore
 	spaces  SpaceOwnership
+	queue   *jobs.Enqueuer
+	log     *slog.Logger
 	cfg     ServiceConfig
 }
 
-func NewService(store *Store, objects ObjectStore, spaces SpaceOwnership, cfg ServiceConfig) *Service {
-	return &Service{store: store, objects: objects, spaces: spaces, cfg: cfg}
+func NewService(store *Store, objects ObjectStore, spaces SpaceOwnership, queue *jobs.Enqueuer, log *slog.Logger, cfg ServiceConfig) *Service {
+	return &Service{store: store, objects: objects, spaces: spaces, queue: queue, log: log, cfg: cfg}
 }
 
 type Upload struct {
@@ -115,7 +119,7 @@ func (s *Service) Confirm(ctx context.Context, spaceID, mediaID, hostID uuid.UUI
 		return Media{}, ErrSizeMismatch
 	}
 
-	if err := s.jobs.Insert(ctx, jobs.ProcessMediaArgs{
+	if err := s.queue.Insert(ctx, jobs.ProcessMediaArgs{
 		MediaID: m.ID, SpaceID: spaceID,
 	}); err != nil {
 		return Media{}, err
@@ -172,7 +176,7 @@ func (s *Service) SweepAbandoned(ctx context.Context, olderThan time.Duration) (
 	removed := 0
 	for _, m := range stale {
 		if _, err := s.store.Delete(ctx, m.ID, m.SpaceID); err != nil {
-			s.log.WarnContext(ctx, "could not delete abandoned media row",
+			slog.WarnContext(ctx, "could not delete abandoned media row",
 				slog.String("media_id", m.ID.String()), slog.Any("error", err))
 			continue
 		}

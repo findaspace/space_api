@@ -13,54 +13,10 @@ import (
 	"github.com/samnart1/space_api/internal/payment"
 )
 
-// The composition root is where cross-domain adapters belong. booking declares
-// what it needs, listing and calendar provide it, and neither imports the other.
+// The composition root is where cross-domain adapters belong. Each domain
+// declares what it needs; this file translates, and no domain imports another.
+
 type spaceSource struct{ listings *listing.Service }
-
-type bookingGateway struct{ bookings *booking.Service }
-
-type hostSource struct{ identity *identity.Service }
-
-func (h hostSource) DisplayNameFor(ctx context.Context, userID uuid.UUID) (string, string, error) {
-	u, err := h.identity.Me(ctx, userID)
-	if err != nil {
-		return "", "", err
-	}
-	name := u.DisplayName
-	if name == "" {
-		name = "Space Host"
-	}
-	return name, u.Phone, nil
-}
-
-func (g bookingGateway) Snapshot(ctx context.Context, id uuid.UUID) (payment.Snapshot, error) {
-	b, err := g.bookings.ByID(ctx, id)
-	if err != nil {
-		return payment.Snapshot{}, err
-	}
-	return payment.Snapshot{
-		ID: b.ID, Reference: b.Reference, HostID: b.HostID, GuestID: b.GuestID,
-		Status: string(b.Status), Mode: string(b.Mode),
-		Currency: b.Currency, DueNowMinor: b.DueNowMinor, FeesMinor: b.FeesMinor,
-	}, nil
-}
-
-func (g bookingGateway) MarkPaid(ctx context.Context, tx pgx.Tx, id uuid.UUID, from string) error {
-	return g.bookings.MarkPaidTx(ctx, tx, id, booking.Status(from))
-}
-
-type payerSource struct{ identity *identity.Service }
-
-func (p payerSource) ContactFor(ctx context.Context, userID uuid.UUID) (string, string, error) {
-	u, err := p.identity.Me(ctx, userID)
-	if err != nil {
-		return "", "", err
-	}
-	if u.Email != nil {
-		return *u.Email, u.Phone, nil
-	}
-	return "", u.Phone, nil
-}
 
 func (s spaceSource) BookableSpace(ctx context.Context, spaceID uuid.UUID) (booking.Space, error) {
 	sp, err := s.listings.GetAnyPublished(ctx, spaceID)
@@ -80,6 +36,16 @@ func (s spaceSource) BookableSpace(ctx context.Context, spaceID uuid.UUID) (book
 type pricer struct {
 	listings  *listing.Service
 	calendars *calendar.Service
+}
+
+type phoneSource struct{ identity *identity.Service }
+
+func (p phoneSource) PhoneFor(ctx context.Context, userID uuid.UUID) (string, error) {
+	u, err := p.identity.Me(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	return u.Phone, nil
 }
 
 func (p pricer) Price(ctx context.Context, sp booking.Space, req booking.PriceRequest) (booking.Priced, error) {
@@ -127,15 +93,48 @@ func (p pricer) Price(ctx context.Context, sp booking.Space, req booking.PriceRe
 	return out, nil
 }
 
-// GetAnyPublished fetches a listing by id without an ownership check. Only
-// published listings are returned, so it is safe for the booking path.
-// func (s *Service) GetAnyPublished(ctx context.Context, id uuid.UUID) (Space, error) {
-// 	sp, err := s.store.GetAny(ctx, id)
-// 	if err != nil {
-// 		return Space{}, err
-// 	}
-// 	if sp.Status != StatusPublished {
-// 		return Space{}, ErrNotFound
-// 	}
-// 	return sp, nil
-// }
+type bookingGateway struct{ bookings *booking.Service }
+
+func (g bookingGateway) Snapshot(ctx context.Context, id uuid.UUID) (payment.Snapshot, error) {
+	b, err := g.bookings.ByID(ctx, id)
+	if err != nil {
+		return payment.Snapshot{}, err
+	}
+	return payment.Snapshot{
+		ID: b.ID, Reference: b.Reference, HostID: b.HostID, GuestID: b.GuestID,
+		Status: string(b.Status), Mode: string(b.Mode),
+		Currency: b.Currency, DueNowMinor: b.DueNowMinor, FeesMinor: b.FeesMinor,
+		StartsOn: b.StartsOn,
+	}, nil
+}
+
+func (g bookingGateway) MarkPaid(ctx context.Context, tx pgx.Tx, id uuid.UUID, from string) error {
+	return g.bookings.MarkPaidTx(ctx, tx, id, booking.Status(from))
+}
+
+type payerSource struct{ identity *identity.Service }
+
+func (p payerSource) ContactFor(ctx context.Context, userID uuid.UUID) (string, string, error) {
+	u, err := p.identity.Me(ctx, userID)
+	if err != nil {
+		return "", "", err
+	}
+	if u.Email != nil {
+		return *u.Email, u.Phone, nil
+	}
+	return "", u.Phone, nil
+}
+
+type hostSource struct{ identity *identity.Service }
+
+func (h hostSource) DisplayNameFor(ctx context.Context, userID uuid.UUID) (string, string, error) {
+	u, err := h.identity.Me(ctx, userID)
+	if err != nil {
+		return "", "", err
+	}
+	name := u.DisplayName
+	if name == "" {
+		name = "Space Host"
+	}
+	return name, u.Phone, nil
+}

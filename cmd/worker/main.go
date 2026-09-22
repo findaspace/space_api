@@ -48,7 +48,7 @@ func run() error {
 	defer stop()
 
 	pool, err := postgres.NewPool(ctx, postgres.Config{
-		URL:          cfg.DatabaseURL,
+		URL:          cfg.DatabaseUrl,
 		MaxConns:     cfg.DBMaxConns,
 		MinConns:     cfg.DBMinConns,
 		ConnLifetime: cfg.DBConnLifetime,

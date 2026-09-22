@@ -55,6 +55,7 @@ type Snapshot struct {
 	Currency    string
 	DueNowMinor int64
 	FeesMinor   int64
+	StartsOn    time.Time
 }
 
 // BookingGateway takes a transaction on MarkPaid because confirming the booking

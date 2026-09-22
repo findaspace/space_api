@@ -25,11 +25,13 @@ type Querier interface {
 	GetSpaceByID(ctx context.Context, id uuid.UUID) (Space, error)
 	GetSpaceForHost(ctx context.Context, arg GetSpaceForHostParams) (Space, error)
 	GetStayRules(ctx context.Context, spaceID uuid.UUID) (StayRule, error)
+	ListAbandonedMedia(ctx context.Context, arg ListAbandonedMediaParams) ([]SpaceMedium, error)
 	ListBlocksInWindow(ctx context.Context, arg ListBlocksInWindowParams) ([]AvailabilityBlock, error)
 	ListMedia(ctx context.Context, spaceID uuid.UUID) ([]SpaceMedium, error)
 	ListRatePlans(ctx context.Context, spaceID uuid.UUID) ([]RatePlan, error)
 	ListRatePlansInWindow(ctx context.Context, arg ListRatePlansInWindowParams) ([]RatePlan, error)
 	ListSpacesForHost(ctx context.Context, arg ListSpacesForHostParams) ([]Space, error)
+	MarkMediaFailed(ctx context.Context, arg MarkMediaFailedParams) error
 	MarkMediaReady(ctx context.Context, arg MarkMediaReadyParams) (SpaceMedium, error)
 	NextMediaPosition(ctx context.Context, spaceID uuid.UUID) (int32, error)
 	SetMediaPosition(ctx context.Context, arg SetMediaPositionParams) error

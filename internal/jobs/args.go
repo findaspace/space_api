@@ -12,6 +12,12 @@ type ProcessMediaArgs struct {
 
 func (ProcessMediaArgs) Kind() string { return "process_media" }
 
+type DeliverNotificationArgs struct {
+	NotificationID uuid.UUID `json:"notification_id"`
+}
+
+func (DeliverNotificationArgs) Kind() string { return "deliver_notification" }
+
 type ExpireHoldsArgs struct{}
 
 func (ExpireHoldsArgs) Kind() string { return "expire_holds" }
@@ -27,3 +33,15 @@ func (SweepUploadsArgs) Kind() string { return "sweep_uploads" }
 type TrialBalanceArgs struct{}
 
 func (TrialBalanceArgs) Kind() string { return "trial_balance" }
+
+type AdvanceBookingsArgs struct{}
+
+func (AdvanceBookingsArgs) Kind() string { return "advance_bookings" }
+
+type RevealReviewsArgs struct{}
+
+func (RevealReviewsArgs) Kind() string { return "reveal_reviews" }
+
+type RefreshSearchStatsArgs struct{}
+
+func (RefreshSearchStatsArgs) Kind() string { return "refresh_search_stats" }

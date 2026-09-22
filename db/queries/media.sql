@@ -4,7 +4,8 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: CountMedia :one
-SELECT count(*) FROM space_media WHERE space_id = @space_id;
+SELECT count(*) FROM space_media 
+WHERE space_id = @space_id AND status <> 'failed';
 
 
 
@@ -44,6 +45,7 @@ WHERE id = @id AND space_id = @space_id;
 
 -- name: ListAbandonedMedia :many
 SELECT * FROM space_media
-WHERE status = 'pending' AND created_at < now() - @older_than::interval
+WHERE (status = 'pending' AND created_at < @cutoff)
+	OR (status = 'failed' AND created_at < @cutoff)
 ORDER BY created_at
 LIMIT @row_limit;

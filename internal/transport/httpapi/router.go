@@ -11,8 +11,12 @@ import (
 	"github.com/samnart1/space_api/internal/identity"
 	"github.com/samnart1/space_api/internal/listing"
 	"github.com/samnart1/space_api/internal/media"
+	"github.com/samnart1/space_api/internal/messaging"
+	"github.com/samnart1/space_api/internal/notify"
 	"github.com/samnart1/space_api/internal/payment"
 	"github.com/samnart1/space_api/internal/payout"
+	"github.com/samnart1/space_api/internal/review"
+	"github.com/samnart1/space_api/internal/search"
 )
 
 type Deps struct {
@@ -31,6 +35,10 @@ type Deps struct {
 	Booking      *booking.Service
 	Payment      *payment.Service
 	Payout       *payout.Service
+	Messaging    *messaging.Service
+	Review       *review.Service
+	Notify       *notify.Service
+	Search       *search.Service
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -39,8 +47,18 @@ func NewRouter(d Deps) http.Handler {
 	ch := calendarHandler{svc: d.Calendar, listings: d.Listing}
 	bh := bookingHandler{svc: d.Booking}
 	ph := paymentHandler{svc: d.Payment}
+	sh := searchHandler{svc: d.Search}
 
 	authed := RequireAuth(d.Tokens)
+
+	nh := notifyHandler{svc: d.Notify}
+
+	mux.Handle("GET /v1/notifications", authed(http.HandlerFunc(nh.inbox)))
+	mux.Handle("POST /v1/notifications/read-all", authed(http.HandlerFunc(nh.markAllRead)))
+	mux.Handle("POST /v1/notifications/{id}/read", authed(http.HandlerFunc(nh.markRead)))
+	mux.Handle("PUT /v1/notifications/preferences", authed(http.HandlerFunc(nh.setPreference)))
+
+	mux.HandleFunc("GET /v1/search", sh.search)
 
 	mux.Handle("POST /v1/bookings/{id}/pay", authed(http.HandlerFunc(ph.intent)))
 	mux.HandleFunc("POST /v1/webhooks/paystack", ph.webhook)
@@ -48,6 +66,18 @@ func NewRouter(d Deps) http.Handler {
 	lh := listingHandler{svc: d.Listing}
 
 	mh := mediaHandler{svc: d.Media, listings: d.Listing}
+
+	mh2 := messagingHandler{svc: d.Messaging}
+	rh := reviewHandler{svc: d.Review, listings: d.Listing}
+
+	mux.Handle("POST /v1/spaces/{id}/messages", authed(http.HandlerFunc(mh2.send)))
+	mux.Handle("GET /v1/threads", authed(http.HandlerFunc(mh2.inbox)))
+	mux.Handle("GET /v1/threads/{id}/messages", authed(http.HandlerFunc(mh2.messages)))
+	mux.Handle("POST /v1/threads/{id}/messages", authed(http.HandlerFunc(mh2.reply)))
+	mux.Handle("POST /v1/threads/{id}/read", authed(http.HandlerFunc(mh2.markRead)))
+
+	mux.Handle("POST /v1/bookings/{id}/reviews", authed(http.HandlerFunc(rh.write)))
+	mux.HandleFunc("GET /v1/listings/{slug}/reviews", rh.forListing)
 
 	mux.HandleFunc("GET /v1/listings/{slug}/media", mh.listPublic)
 

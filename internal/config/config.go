@@ -63,6 +63,10 @@ type Config struct {
 	PaystackTimeout     time.Duration
 
 	PayoutHoldDays int
+
+	ArkeselAPIKey  string
+	SMSSenderID    string
+	ArkeselSandbox bool
 }
 
 func (c Config) IsProduction() bool {
@@ -206,6 +210,10 @@ func Load() (Config, error) {
 		PaystackCallbackURL: l.str("SPACE_PAYSTACK_CALLBACK_URL", ""),
 		PaystackTimeout:     l.duration("SPACE_PAYSTACK_TIMEOUT", 20*time.Second),
 		PayoutHoldDays:      l.int("SPACE_PAYOUT_HOLD_DAYS", 2),
+
+		ArkeselAPIKey:  l.str("SPACE_ARKESEL_API_KEY", "unset"),
+		SMSSenderID:    l.str("SPACE_SMS_SENDER_ID", "Space"),
+		ArkeselSandbox: l.boolean("SPACE_ARKESEL_SANDBOX", true),
 	}
 
 	var problems []string
@@ -236,6 +244,10 @@ func Load() (Config, error) {
 	if len(problems) > 0 {
 		return Config{}, fmt.Errorf("config: %s", strings.Join(problems, "; "))
 	}
+	if cfg.IsProduction() && cfg.SMSProvider == "arkesel" && cfg.ArkeselSandbox {
+		problems = append(problems, "SPACE_ARKESEL_SANDBOX must be false in production")
+	}
+
 	return cfg, nil
 }
 

@@ -158,7 +158,8 @@ func (s *Store) MarkFailed(ctx context.Context, id, spaceID uuid.UUID, reason st
 
 func (s *Store) Abandoned(ctx context.Context, olderThan time.Duration, limit int32) ([]Media, error) {
 	rows, err := s.q.ListAbandonedMedia(ctx, dbgen.ListAbandonedMediaParams{
-		OlderThan: olderThan, RowLimit: limit,
+		Cutoff:   time.Now().Add(-olderThan),
+		RowLimit: limit,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list abandoned media: %w", err)

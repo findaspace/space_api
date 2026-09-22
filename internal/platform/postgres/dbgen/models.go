@@ -148,6 +148,51 @@ func (ns NullCancellationPolicy) Value() (driver.Value, error) {
 	return string(ns.CancellationPolicy), nil
 }
 
+type DeliveryStatus string
+
+const (
+	DeliveryStatusPending DeliveryStatus = "pending"
+	DeliveryStatusSending DeliveryStatus = "sending"
+	DeliveryStatusSent    DeliveryStatus = "sent"
+	DeliveryStatusFailed  DeliveryStatus = "failed"
+	DeliveryStatusSkipped DeliveryStatus = "skipped"
+)
+
+func (e *DeliveryStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DeliveryStatus(s)
+	case string:
+		*e = DeliveryStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DeliveryStatus: %T", src)
+	}
+	return nil
+}
+
+type NullDeliveryStatus struct {
+	DeliveryStatus DeliveryStatus
+	Valid          bool // Valid is true if DeliveryStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDeliveryStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.DeliveryStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DeliveryStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDeliveryStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DeliveryStatus), nil
+}
+
 type EntryDirection string
 
 const (
@@ -285,6 +330,7 @@ type MediaStatus string
 const (
 	MediaStatusPending MediaStatus = "pending"
 	MediaStatusReady   MediaStatus = "ready"
+	MediaStatusFailed  MediaStatus = "failed"
 )
 
 func (e *MediaStatus) Scan(src interface{}) error {
@@ -320,6 +366,49 @@ func (ns NullMediaStatus) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.MediaStatus), nil
+}
+
+type NotificationChannel string
+
+const (
+	NotificationChannelInApp NotificationChannel = "in_app"
+	NotificationChannelSms   NotificationChannel = "sms"
+	NotificationChannelPush  NotificationChannel = "push"
+)
+
+func (e *NotificationChannel) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NotificationChannel(s)
+	case string:
+		*e = NotificationChannel(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NotificationChannel: %T", src)
+	}
+	return nil
+}
+
+type NullNotificationChannel struct {
+	NotificationChannel NotificationChannel
+	Valid               bool // Valid is true if NotificationChannel is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNotificationChannel) Scan(value interface{}) error {
+	if value == nil {
+		ns.NotificationChannel, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NotificationChannel.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNotificationChannel) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NotificationChannel), nil
 }
 
 type OtpPurpose string
@@ -409,6 +498,93 @@ func (ns NullPaymentStatus) Value() (driver.Value, error) {
 	return string(ns.PaymentStatus), nil
 }
 
+type PayoutChannel string
+
+const (
+	PayoutChannelMobileMoney PayoutChannel = "mobile_money"
+	PayoutChannelBank        PayoutChannel = "bank"
+)
+
+func (e *PayoutChannel) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PayoutChannel(s)
+	case string:
+		*e = PayoutChannel(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PayoutChannel: %T", src)
+	}
+	return nil
+}
+
+type NullPayoutChannel struct {
+	PayoutChannel PayoutChannel
+	Valid         bool // Valid is true if PayoutChannel is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPayoutChannel) Scan(value interface{}) error {
+	if value == nil {
+		ns.PayoutChannel, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PayoutChannel.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPayoutChannel) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PayoutChannel), nil
+}
+
+type PayoutStatus string
+
+const (
+	PayoutStatusPending    PayoutStatus = "pending"
+	PayoutStatusProcessing PayoutStatus = "processing"
+	PayoutStatusPaid       PayoutStatus = "paid"
+	PayoutStatusFailed     PayoutStatus = "failed"
+	PayoutStatusReversed   PayoutStatus = "reversed"
+)
+
+func (e *PayoutStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PayoutStatus(s)
+	case string:
+		*e = PayoutStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PayoutStatus: %T", src)
+	}
+	return nil
+}
+
+type NullPayoutStatus struct {
+	PayoutStatus PayoutStatus
+	Valid        bool // Valid is true if PayoutStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPayoutStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.PayoutStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PayoutStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPayoutStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PayoutStatus), nil
+}
+
 type PricePeriod string
 
 const (
@@ -493,6 +669,48 @@ func (ns NullRentalMode) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.RentalMode), nil
+}
+
+type ReviewRole string
+
+const (
+	ReviewRoleGuest ReviewRole = "guest"
+	ReviewRoleHost  ReviewRole = "host"
+)
+
+func (e *ReviewRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ReviewRole(s)
+	case string:
+		*e = ReviewRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ReviewRole: %T", src)
+	}
+	return nil
+}
+
+type NullReviewRole struct {
+	ReviewRole ReviewRole
+	Valid      bool // Valid is true if ReviewRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullReviewRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.ReviewRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ReviewRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullReviewRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ReviewRole), nil
 }
 
 type SpaceStatus string
@@ -742,6 +960,48 @@ type LedgerTransaction struct {
 	CreatedAt   time.Time
 }
 
+type Message struct {
+	ID        uuid.UUID
+	ThreadID  uuid.UUID
+	SenderID  uuid.UUID
+	Body      string
+	Redacted  bool
+	CreatedAt time.Time
+}
+
+type Notification struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	Event     string
+	EventKey  string
+	Title     string
+	Body      string
+	Sms       string
+	Data      []byte
+	ReadAt    pgtype.Timestamptz
+	CreatedAt time.Time
+}
+
+type NotificationDelivery struct {
+	ID             uuid.UUID
+	NotificationID uuid.UUID
+	Channel        NotificationChannel
+	Status         DeliveryStatus
+	ProviderRef    string
+	Error          string
+	Attempts       int16
+	SentAt         pgtype.Timestamptz
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type NotificationPreference struct {
+	UserID uuid.UUID
+	Event  string
+	Sms    bool
+	Push   bool
+}
+
 type OtpChallenge struct {
 	ID          uuid.UUID
 	PhoneE164   string
@@ -775,6 +1035,37 @@ type Payment struct {
 	UpdatedAt        time.Time
 }
 
+type Payout struct {
+	ID            uuid.UUID
+	HostID        uuid.UUID
+	AccountID     uuid.UUID
+	Reference     string
+	TransferCode  string
+	Status        PayoutStatus
+	Currency      string
+	AmountMinor   int64
+	FailureReason string
+	SettledAt     pgtype.Timestamptz
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type PayoutAccount struct {
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	Provider      string
+	RecipientCode string
+	Channel       PayoutChannel
+	BankCode      string
+	AccountNumber string
+	AccountName   string
+	Currency      string
+	VerifiedAt    pgtype.Timestamptz
+	IsDefault     bool
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
 type RatePlan struct {
 	ID         uuid.UUID
 	SpaceID    uuid.UUID
@@ -785,6 +1076,19 @@ type RatePlan struct {
 	MinNights  *int16
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+type Review struct {
+	ID         uuid.UUID
+	BookingID  uuid.UUID
+	SpaceID    uuid.UUID
+	AuthorID   uuid.UUID
+	SubjectID  uuid.UUID
+	AuthorRole ReviewRole
+	Rating     int16
+	Body       string
+	RevealedAt pgtype.Timestamptz
+	CreatedAt  time.Time
 }
 
 type RoleGrant struct {
@@ -837,17 +1141,19 @@ type Space struct {
 }
 
 type SpaceMedium struct {
-	ID          uuid.UUID
-	SpaceID     uuid.UUID
-	ObjectKey   string
-	ContentType string
-	ByteSize    int64
-	Width       int32
-	Height      int32
-	Position    int32
-	Status      MediaStatus
-	CreatedAt   time.Time
-	ReadyAt     pgtype.Timestamptz
+	ID            uuid.UUID
+	SpaceID       uuid.UUID
+	ObjectKey     string
+	ContentType   string
+	ByteSize      int64
+	Width         int32
+	Height        int32
+	Position      int32
+	Status        MediaStatus
+	CreatedAt     time.Time
+	ReadyAt       pgtype.Timestamptz
+	FailureReason string
+	Attempts      int16
 }
 
 type StayRule struct {
@@ -859,6 +1165,18 @@ type StayRule struct {
 	CleaningFeeMinor   int64
 	UpdatedAt          time.Time
 	CancellationPolicy CancellationPolicy
+}
+
+type Thread struct {
+	ID            uuid.UUID
+	SpaceID       uuid.UUID
+	GuestID       uuid.UUID
+	HostID        uuid.UUID
+	LastMessageAt time.Time
+	GuestReadAt   pgtype.Timestamptz
+	HostReadAt    pgtype.Timestamptz
+	Flagged       bool
+	CreatedAt     time.Time
 }
 
 type User struct {

@@ -52,3 +52,6 @@ test-integration: ## run tests against the local database
 itest: ## run every test, integration included
 	SPACE_TEST_DATABASE_URL="postgres://space:space@localhost:5432/space?sslmode=disable" \
 		go test -race -count=1 ./...
+
+worker:
+	go run ./cmd/worker/

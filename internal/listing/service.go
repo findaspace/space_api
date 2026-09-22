@@ -255,3 +255,13 @@ func (s *Service) GetAnyPublished(ctx context.Context, id uuid.UUID) (Space, err
 	}
 	return sp, nil
 }
+
+// HostOf satisfies messaging.SpaceLookup. Only published listings can be
+// messaged about; a draft has no public page to enquire from.
+func (s *Service) HostOf(ctx context.Context, spaceID uuid.UUID) (uuid.UUID, error) {
+	sp, err := s.GetAnyPublished(ctx, spaceID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return sp.HostID, nil
+}

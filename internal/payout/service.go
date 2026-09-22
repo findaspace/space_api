@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/samnart1/space_api/internal/ledger"
+	"github.com/samnart1/space_api/internal/notify"
 	"github.com/samnart1/space_api/internal/platform/paystack"
 	"github.com/samnart1/space_api/internal/platform/postgres"
 )
@@ -26,12 +27,19 @@ type ServiceConfig struct {
 }
 
 type Service struct {
-	store  *Store
-	client *paystack.Client
-	hosts  HostSource
-	log    *slog.Logger
-	cfg    ServiceConfig
+	store    *Store
+	client   *paystack.Client
+	hosts    HostSource
+	log      *slog.Logger
+	cfg      ServiceConfig
+	notifier Notifier
 }
+
+type Notifier interface {
+	NotifyTx(ctx context.Context, tx pgx.Tx, e notify.Event) error
+}
+
+func (s *Service) SetNotifier(n Notifier) { s.notifier = n }
 
 func NewService(store *Store, client *paystack.Client, hosts HostSource,
 	log *slog.Logger, cfg ServiceConfig) *Service {
@@ -155,14 +163,10 @@ func (s *Service) Request(ctx context.Context, hostID uuid.UUID, amountMinor int
 	return p, nil
 }
 
-// HandleTransfer satisfies payment.TransferHandler. It runs inside the same
-// transaction as the webhook's dedupe row, so the ledger posting and the
-// payout status commit together or not at all.
 func (s *Service) HandleTransfer(ctx context.Context, tx pgx.Tx, event string, t paystack.Transfer) error {
 	p, err := s.store.ByReferenceTx(ctx, tx, t.Reference)
 	if errors.Is(err, ErrNotFound) {
-		s.log.WarnContext(ctx, "transfer event for unknown payout",
-			slog.String("reference", t.Reference))
+		s.log.WarnContext(ctx, "transfer event for unknown payout", slog.String("reference", t.Reference))
 		return nil
 	}
 	if err != nil {
@@ -182,14 +186,15 @@ func (s *Service) HandleTransfer(ctx context.Context, tx pgx.Tx, event string, t
 			ledger.Payout(p.HostID, p.Currency, p.Reference, p.AmountMinor)); err != nil {
 			return err
 		}
-		return s.store.SetStatusTx(ctx, tx, p.ID, StatusPaid, "")
+		if err := s.store.SetStatusTx(ctx, tx, p.ID, StatusPaid, ""); err != nil {
+			return err
+		}
+		return s.notify(ctx, tx, p, notify.PayoutPaid(p.AmountMinor), "payout.paid:")
 
 	case "transfer.failed":
 		if p.Status == StatusPaid {
 			return nil
 		}
-		// No ledger entry was ever made, so there is nothing to reverse. The
-		// balance frees itself once the payout stops counting as in flight.
 		reason := firstNonEmpty(t.FailureReason, t.Reason, "transfer failed")
 		return s.store.SetStatusTx(ctx, tx, p.ID, StatusFailed, reason)
 
@@ -201,9 +206,25 @@ func (s *Service) HandleTransfer(ctx context.Context, tx pgx.Tx, event string, t
 			p.HostID, p.Currency, p.Reference+"-rev", p.AmountMinor)); err != nil {
 			return err
 		}
-		return s.store.SetStatusTx(ctx, tx, p.ID, StatusReversed, "reversed by the processor")
+		if err := s.store.SetStatusTx(ctx, tx, p.ID, StatusReversed, "reversed by the processor"); err != nil {
+			return err
+		}
+		return s.notify(ctx, tx, p, notify.PayoutReversed(p.AmountMinor), "payout.reversed:")
 	}
 	return nil
+}
+
+// notify raises a payout notice inside the webhook transaction. The reversal
+// case is the one that matters: without it, a host's balance silently goes back
+// up and nobody tells them why.
+func (s *Service) notify(ctx context.Context, tx pgx.Tx, p Payout, e notify.Event, keyPrefix string) error {
+	if s.notifier == nil {
+		return nil
+	}
+	e.UserID = p.HostID
+	e.Key = keyPrefix + p.Reference
+	e.Data = map[string]any{"payout_id": p.ID.String()}
+	return s.notifier.NotifyTx(ctx, tx, e)
 }
 
 // Reconcile asks Paystack about payouts that have been processing too long.

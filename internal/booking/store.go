@@ -317,3 +317,28 @@ func (s *Store) ByID(ctx context.Context, id uuid.UUID) (Booking, error) {
 	}
 	return b, nil
 }
+
+// Advance moves bookings through their time-driven states. It is a set-based
+// UPDATE rather than a loop through Authorize, because every WHERE clause below
+// only matches rows in a legal from-state for that exact transition. The state
+// machine still holds; it is expressed in SQL here because the rows are many.
+func (s *Store) Advance(ctx context.Context) (started, completed int64, err error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE bookings SET status = 'active'
+		WHERE rental_mode = 'term' AND status = 'confirmed' AND starts_on <= CURRENT_DATE`)
+	if err != nil {
+		return 0, 0, fmt.Errorf("start leases: %w", err)
+	}
+	started = tag.RowsAffected()
+
+	tag, err = s.pool.Exec(ctx, `
+		UPDATE bookings SET status = 'completed'
+		WHERE ends_on <= CURRENT_DATE AND (
+			(rental_mode = 'nightly' AND status = 'confirmed') OR
+			(rental_mode = 'term'    AND status = 'active')
+		)`)
+	if err != nil {
+		return started, 0, fmt.Errorf("complete stays: %w", err)
+	}
+	return started, tag.RowsAffected(), nil
+}
