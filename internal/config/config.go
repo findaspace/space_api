@@ -67,6 +67,16 @@ type Config struct {
 	ArkeselAPIKey  string
 	SMSSenderID    string
 	ArkeselSandbox bool
+
+	RateLimitEnabled bool
+	RateLimitAuth    int
+	RateLimitRead    int
+	RateLimitWrite   int
+	RateLimitWebhook int
+	CORSOrigins      []string
+	RequestTimeout   time.Duration
+	DBExecMode       string
+	DBStatementCache int
 }
 
 func (c Config) IsProduction() bool {
@@ -214,6 +224,16 @@ func Load() (Config, error) {
 		ArkeselAPIKey:  l.str("SPACE_ARKESEL_API_KEY", "unset"),
 		SMSSenderID:    l.str("SPACE_SMS_SENDER_ID", "Space"),
 		ArkeselSandbox: l.boolean("SPACE_ARKESEL_SANDBOX", true),
+
+		RateLimitEnabled: l.boolean("SPACE_RATELIMIT_ENABLED", true),
+		RateLimitAuth:    l.int("SPACE_RATELIMIT_AUTH_PER_MIN", 10),
+		RateLimitRead:    l.int("SPACE_RATELIMIT_READ_PER_MIN", 240),
+		RateLimitWrite:   l.int("SPACE_RATELIMIT_WRITE_PER_MIN", 60),
+		RateLimitWebhook: l.int("SPACE_RATELIMIT_WEBHOOK_PER_MIN", 600),
+		CORSOrigins:      l.list("SPACE_CORS_ORIGINS", nil),
+		RequestTimeout:   l.duration("SPACE_REQUEST_TIMEOUT", 15*time.Second),
+		DBExecMode:       l.str("SPACE_DB_EXEC_MODE", "cache_statement"),
+		DBStatementCache: l.int("SPACE_DB_STATEMENT_CACHE", 512),
 	}
 
 	var problems []string
@@ -247,6 +267,12 @@ func Load() (Config, error) {
 	if cfg.IsProduction() && cfg.SMSProvider == "arkesel" && cfg.ArkeselSandbox {
 		problems = append(problems, "SPACE_ARKESEL_SANDBOX must be false in production")
 	}
+	if cfg.IsProduction() && !cfg.RateLimitEnabled {
+		problems = append(problems, "SPACE_RATELIMIT_ENABLED must not be false in production")
+	}
+	if cfg.IsProduction() && len(cfg.CORSOrigins) == 0 {
+		problems = append(problems, "SPACE_CORS_ORIGINS must list the web origins in production")
+	}
 
 	return cfg, nil
 }
@@ -275,4 +301,19 @@ func (l *loader) boolean(key string, def bool) bool {
 		return def
 	}
 	return b
+}
+
+func (l *loader) list(key string, def []string) []string {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

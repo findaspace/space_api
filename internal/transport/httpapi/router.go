@@ -15,30 +15,41 @@ import (
 	"github.com/samnart1/space_api/internal/notify"
 	"github.com/samnart1/space_api/internal/payment"
 	"github.com/samnart1/space_api/internal/payout"
+	"github.com/samnart1/space_api/internal/platform/ratelimit"
 	"github.com/samnart1/space_api/internal/review"
 	"github.com/samnart1/space_api/internal/search"
 )
 
 type Deps struct {
-	Pool         *pgxpool.Pool
-	Logger       *slog.Logger
-	PingTimeout  time.Duration
-	MaxBodyBytes int64
-	Version      string
-	Commit       string
-	Identity     *identity.Service
-	Tokens       *identity.TokenIssuer
-	TrustProxy   bool
-	Listing      *listing.Service
-	Media        *media.Service
-	Calendar     *calendar.Service
-	Booking      *booking.Service
-	Payment      *payment.Service
-	Payout       *payout.Service
-	Messaging    *messaging.Service
-	Review       *review.Service
-	Notify       *notify.Service
-	Search       *search.Service
+	Pool           *pgxpool.Pool
+	Logger         *slog.Logger
+	PingTimeout    time.Duration
+	MaxBodyBytes   int64
+	Version        string
+	Commit         string
+	Identity       *identity.Service
+	Tokens         *identity.TokenIssuer
+	TrustProxy     bool
+	Listing        *listing.Service
+	Media          *media.Service
+	Calendar       *calendar.Service
+	Booking        *booking.Service
+	Payment        *payment.Service
+	Payout         *payout.Service
+	Messaging      *messaging.Service
+	Review         *review.Service
+	Notify         *notify.Service
+	Search         *search.Service
+	Limits         Limiters
+	CORSOrigins    []string
+	RequestTimeout time.Duration
+}
+
+type Limiters struct {
+	Auth    *ratelimit.Limiter
+	Write   *ratelimit.Limiter
+	Read    *ratelimit.Limiter
+	Webhook *ratelimit.Limiter
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -48,6 +59,16 @@ func NewRouter(d Deps) http.Handler {
 	bh := bookingHandler{svc: d.Booking}
 	ph := paymentHandler{svc: d.Payment}
 	sh := searchHandler{svc: d.Search}
+
+	authLimit := RateLimit(d.Limits.Auth, IPKey(d.TrustProxy))
+	readLimit := RateLimit(d.Limits.Read, ClientKey(d.TrustProxy))
+	writeLimit := RateLimit(d.Limits.Write, ClientKey(d.TrustProxy))
+	hookLimit := RateLimit(d.Limits.Webhook, IPKey(d.TrustProxy))
+
+	mux.Handle("POST /v1/auth/otp", authLimit(http.HandlerFunc(auth.requestOTP)))
+	mux.Handle("POST /v1/auth/verify", authLimit(http.HandlerFunc(auth.verifyOTP)))
+	mux.Handle("POST /v1/auth/refresh", authLimit(http.HandlerFunc(auth.refresh)))
+	mux.Handle("POST /v1/auth/logout", authLimit(http.HandlerFunc(auth.logout)))
 
 	authed := RequireAuth(d.Tokens)
 
@@ -146,11 +167,30 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /v1/bookings/{id}/approve", authed(http.HandlerFunc(bh.approve)))
 	mux.Handle("POST /v1/bookings/{id}/decline", authed(http.HandlerFunc(bh.decline)))
 
+	mux.Handle("GET /v1/search", readLimit(http.HandlerFunc(sh.search)))
+	mux.Handle("GET /v1/listings/{slug}", readLimit(http.HandlerFunc(lh.getPublic)))
+	mux.Handle("GET /v1/listings/{slug}/media", readLimit(http.HandlerFunc(mediaH.listPublic)))
+	mux.Handle("GET /v1/listings/{slug}/quote", readLimit(http.HandlerFunc(ch.quote)))
+	mux.Handle("GET /v1/listings/{slug}/calendar", readLimit(http.HandlerFunc(ch.publicCalendar)))
+	mux.Handle("GET /v1/listings/{slug}/reviews", readLimit(http.HandlerFunc(rh.forListing)))
+	mux.Handle("GET /v1/space-types", readLimit(http.HandlerFunc(lh.spaceTypes)))
+
+	mux.Handle("POST /v1/bookings", authed(writeLimit(http.HandlerFunc(bh.create))))
+	mux.Handle("POST /v1/spaces", authed(writeLimit(http.HandlerFunc(lh.create))))
+	mux.Handle("POST /v1/spaces/{id}/media", authed(writeLimit(http.HandlerFunc(mediaH.requestUpload))))
+	mux.Handle("POST /v1/spaces/{id}/messages", authed(writeLimit(http.HandlerFunc(msgH.send))))
+	mux.Handle("POST /v1/threads/{id}/messages", authed(writeLimit(http.HandlerFunc(msgH.reply))))
+	mux.Handle("POST /v1/payouts", authed(writeLimit(http.HandlerFunc(poh.request))))
+
+	mux.Handle("POST /v1/webhooks/paystack", hookLimit(http.HandlerFunc(ph.webhook)))
+
 	return Chain(mux,
 		RequestID,
+		CORS(d.CORSOrigins),
 		SecurityHeaders,
 		Logger(d.Logger),
 		Recover,
+		Timeout(d.RequestTimeout),
 		MaxBytes(d.MaxBodyBytes),
 	)
 }

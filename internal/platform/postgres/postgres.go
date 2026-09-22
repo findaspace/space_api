@@ -11,11 +11,13 @@ import (
 )
 
 type Config struct {
-	URL          string
-	MaxConns     int32
-	MinConns     int32
-	ConnLifetime time.Duration
-	PingTimeout  time.Duration
+	URL               string
+	MaxConns          int32
+	MinConns          int32
+	ConnLifetime      time.Duration
+	PingTimeout       time.Duration
+	ExecMode          string
+	StatementCacheCap int
 }
 
 func NewPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
@@ -37,6 +39,29 @@ func NewPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.NewWithConfig(ctx, pc)
 	if err != nil {
 		return nil, fmt.Errorf("create pool: %w", err)
+	}
+
+	// pgx defaults to cache_statement, which prepares each distinct SQL text
+	// and keeps an LRU per connection. Behind a transaction-mode pooler such as
+	// PgBouncer, sessions move between statements and those prepared statements
+	// disappear, so the mode has to be switchable per deployment.
+	switch cfg.ExecMode {
+	case "", "cache_statement":
+		pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeCacheStatement
+	case "cache_describe":
+		pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeCacheDescribe
+	case "describe_exec":
+		pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeDescribeExec
+	case "exec":
+		pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	case "simple_protocol":
+		pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	default:
+		return nil, fmt.Errorf("unknown SPACE_DB_EXEC_MODE %q", cfg.ExecMode)
+	}
+
+	if cfg.StatementCacheCap > 0 {
+		pc.ConnConfig.StatementCacheCapacity = cfg.StatementCacheCap
 	}
 
 	pingCtx, cancel := context.WithTimeout(ctx, cfg.PingTimeout)

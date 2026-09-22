@@ -23,6 +23,7 @@ import (
 	"github.com/samnart1/space_api/internal/platform/objectstore"
 	"github.com/samnart1/space_api/internal/platform/paystack"
 	"github.com/samnart1/space_api/internal/platform/postgres"
+	"github.com/samnart1/space_api/internal/platform/ratelimit"
 	"github.com/samnart1/space_api/internal/platform/sms"
 	"github.com/samnart1/space_api/internal/platform/telemetry"
 	"github.com/samnart1/space_api/internal/review"
@@ -175,26 +176,59 @@ func run() error {
 
 	searchSvc := search.NewService(search.NewStore(pool), objects)
 
+	tier := func(perMin int) ratelimit.Tier {
+		// Burst is a quarter of the per-minute rate: enough for a page that
+		// fires several requests at once, not enough to be a useful weapon.
+		burst := perMin / 4
+		if burst < 5 {
+			burst = 5
+		}
+		return ratelimit.Tier{PerMin: perMin, Burst: burst}
+	}
+
+	// A disabled limiter is a very high one rather than a nil check at every
+	// call site: one code path, and the switch cannot be half-applied.
+	scale := 1
+	if !cfg.RateLimitEnabled {
+		scale = 10_000
+	}
+
+	limits := httpapi.Limiters{
+		Auth:    ratelimit.New(tier(cfg.RateLimitAuth * scale)),
+		Read:    ratelimit.New(tier(cfg.RateLimitRead * scale)),
+		Write:   ratelimit.New(tier(cfg.RateLimitWrite * scale)),
+		Webhook: ratelimit.New(tier(cfg.RateLimitWebhook * scale)),
+	}
+	defer func() {
+		limits.Auth.Close()
+		limits.Read.Close()
+		limits.Write.Close()
+		limits.Webhook.Close()
+	}()
+
 	router := httpapi.NewRouter(httpapi.Deps{
-		Pool:         pool,
-		Logger:       log,
-		PingTimeout:  cfg.DBPingTimeout,
-		MaxBodyBytes: 1 << 20,
-		Version:      version,
-		Commit:       commit,
-		Identity:     identitySvc,
-		Tokens:       tokens,
-		TrustProxy:   cfg.TrustProxy,
-		Listing:      listingSvc,
-		Media:        mediaSvc,
-		Calendar:     calendarSvc,
-		Booking:      bookingSvc,
-		Payment:      paymentSvc,
-		Payout:       payoutSvc,
-		Messaging:    messagingSvc,
-		Review:       reviewSvc,
-		Notify:       notifySvc,
-		Search:       searchSvc,
+		Pool:           pool,
+		Logger:         log,
+		PingTimeout:    cfg.DBPingTimeout,
+		MaxBodyBytes:   1 << 20,
+		Version:        version,
+		Commit:         commit,
+		Identity:       identitySvc,
+		Tokens:         tokens,
+		TrustProxy:     cfg.TrustProxy,
+		Listing:        listingSvc,
+		Media:          mediaSvc,
+		Calendar:       calendarSvc,
+		Booking:        bookingSvc,
+		Payment:        paymentSvc,
+		Payout:         payoutSvc,
+		Messaging:      messagingSvc,
+		Review:         reviewSvc,
+		Notify:         notifySvc,
+		Search:         searchSvc,
+		Limits:         limits,
+		CORSOrigins:    cfg.CORSOrigins,
+		RequestTimeout: cfg.RequestTimeout,
 	})
 
 	log.Info("paystack configured",
