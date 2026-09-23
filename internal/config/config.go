@@ -77,6 +77,8 @@ type Config struct {
 	RequestTimeout   time.Duration
 	DBExecMode       string
 	DBStatementCache int
+
+	MetricsAddr string
 }
 
 func (c Config) IsProduction() bool {
@@ -234,6 +236,8 @@ func Load() (Config, error) {
 		RequestTimeout:   l.duration("SPACE_REQUEST_TIMEOUT", 15*time.Second),
 		DBExecMode:       l.str("SPACE_DB_EXEC_MODE", "cache_statement"),
 		DBStatementCache: l.int("SPACE_DB_STATEMENT_CACHE", 512),
+
+		MetricsAddr: l.str("SPACE_METRICS_ADDR", ":9091"),
 	}
 
 	var problems []string

@@ -33,6 +33,11 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
+type RateLimitedError struct{ RetryAfter time.Duration }
+
+func (e *RateLimitedError) Error() string        { return "identity: too many requests" }
+func (e *RateLimitedError) Is(target error) bool { return target == ErrTooManyOTP }
+
 const userColumns = `id, phone_e164, email, display_name, status::text, phone_verified_at, created_at`
 
 func scanUser(row pgx.Row) (User, error) {
@@ -352,3 +357,21 @@ func (s *Store) GrantRole(ctx context.Context, userID uuid.UUID, role Role) erro
 // 	}
 // 	return toDomain(row)
 // }
+
+// RetryAfter reports how long until the oldest challenge in the window expires,
+// which is the soonest a blocked caller can succeed.
+func (s *Store) RetryAfter(ctx context.Context, phone string, window time.Duration) (time.Duration, error) {
+	var seconds float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(EXTRACT(EPOCH FROM (MIN(created_at) + $2::interval - now())), 0)
+		FROM otp_challenges
+		WHERE phone_e164 = $1 AND created_at > now() - $2::interval`,
+		phone, window).Scan(&seconds)
+	if err != nil {
+		return 0, fmt.Errorf("compute otp retry-after: %w", err)
+	}
+	if seconds < 1 {
+		return time.Second, nil
+	}
+	return time.Duration(seconds) * time.Second, nil
+}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/samnart1/space_api/internal/identity"
@@ -212,6 +213,14 @@ func writeIdentityError(w http.ResponseWriter, r *http.Request, err error) {
 
 	case errors.Is(err, identity.ErrUserSuspended):
 		p = Problem{Status: http.StatusForbidden, Title: "account suspended"}
+
+	case errors.Is(err, identity.ErrTooManyOTP):
+		var limited *identity.RateLimitedError
+		if errors.As(err, &limited) {
+			w.Header().Set("Retry-After", strconv.Itoa(int(limited.RetryAfter.Seconds())))
+		}
+		p = Problem{Status: http.StatusTooManyRequests, Title: "too many requests",
+			Detail: "wait before requesting another code"}
 
 	default:
 		// Unmapped means a bug or an infrastructure failure. The client gets

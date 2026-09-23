@@ -42,3 +42,6 @@ jobs:
       - run: go build ./...
       - run: go run ./cmd/migrate
       - run: go test -race -count=1 ./...
+
+    - name: Validate the OpenAPI spec
+      run: npx --yes @redocly/cli@latest lint api/openapi.yaml

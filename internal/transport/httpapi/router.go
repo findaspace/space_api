@@ -15,6 +15,7 @@ import (
 	"github.com/samnart1/space_api/internal/notify"
 	"github.com/samnart1/space_api/internal/payment"
 	"github.com/samnart1/space_api/internal/payout"
+	"github.com/samnart1/space_api/internal/platform/metrics"
 	"github.com/samnart1/space_api/internal/platform/ratelimit"
 	"github.com/samnart1/space_api/internal/review"
 	"github.com/samnart1/space_api/internal/search"
@@ -43,6 +44,7 @@ type Deps struct {
 	Limits         Limiters
 	CORSOrigins    []string
 	RequestTimeout time.Duration
+	Metrics        *metrics.Metrics
 }
 
 type Limiters struct {
@@ -79,39 +81,39 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /v1/notifications/{id}/read", authed(http.HandlerFunc(nh.markRead)))
 	mux.Handle("PUT /v1/notifications/preferences", authed(http.HandlerFunc(nh.setPreference)))
 
-	mux.HandleFunc("GET /v1/search", sh.search)
+	// mux.HandleFunc("GET /v1/search", sh.search)
 
 	mux.Handle("POST /v1/bookings/{id}/pay", authed(http.HandlerFunc(ph.intent)))
-	mux.HandleFunc("POST /v1/webhooks/paystack", ph.webhook)
+	// mux.HandleFunc("POST /v1/webhooks/paystack", ph.webhook)
 
 	lh := listingHandler{svc: d.Listing}
 
-	mh := mediaHandler{svc: d.Media, listings: d.Listing}
+	mediaH := mediaHandler{svc: d.Media, listings: d.Listing}
 
-	mh2 := messagingHandler{svc: d.Messaging}
+	msgH := messagingHandler{svc: d.Messaging}
 	rh := reviewHandler{svc: d.Review, listings: d.Listing}
 
-	mux.Handle("POST /v1/spaces/{id}/messages", authed(http.HandlerFunc(mh2.send)))
-	mux.Handle("GET /v1/threads", authed(http.HandlerFunc(mh2.inbox)))
-	mux.Handle("GET /v1/threads/{id}/messages", authed(http.HandlerFunc(mh2.messages)))
-	mux.Handle("POST /v1/threads/{id}/messages", authed(http.HandlerFunc(mh2.reply)))
-	mux.Handle("POST /v1/threads/{id}/read", authed(http.HandlerFunc(mh2.markRead)))
+	// mux.Handle("POST /v1/spaces/{id}/messages", authed(http.HandlerFunc(msgH.send)))
+	mux.Handle("GET /v1/threads", authed(http.HandlerFunc(msgH.inbox)))
+	mux.Handle("GET /v1/threads/{id}/messages", authed(http.HandlerFunc(msgH.messages)))
+	// mux.Handle("POST /v1/threads/{id}/messages", authed(http.HandlerFunc(msgH.reply)))
+	mux.Handle("POST /v1/threads/{id}/read", authed(http.HandlerFunc(msgH.markRead)))
 
 	mux.Handle("POST /v1/bookings/{id}/reviews", authed(http.HandlerFunc(rh.write)))
-	mux.HandleFunc("GET /v1/listings/{slug}/reviews", rh.forListing)
+	// mux.HandleFunc("GET /v1/listings/{slug}/reviews", rh.forListing)
 
-	mux.HandleFunc("GET /v1/listings/{slug}/media", mh.listPublic)
+	// mux.HandleFunc("GET /v1/listings/{slug}/media", mediaH.listPublic)
 
-	mux.Handle("GET /v1/spaces/{id}/media", authed(http.HandlerFunc(mh.listOwn)))
-	mux.Handle("POST /v1/spaces/{id}/media", authed(http.HandlerFunc(mh.requestUpload)))
-	mux.Handle("PUT /v1/spaces/{id}/media/order", authed(http.HandlerFunc(mh.reorder)))
-	mux.Handle("POST /v1/spaces/{id}/media/{mediaId}/confirm", authed(http.HandlerFunc(mh.confirm)))
-	mux.Handle("DELETE /v1/spaces/{id}/media/{mediaId}", authed(http.HandlerFunc(mh.remove)))
+	mux.Handle("GET /v1/spaces/{id}/media", authed(http.HandlerFunc(mediaH.listOwn)))
+	// mux.Handle("POST /v1/spaces/{id}/media", authed(http.HandlerFunc(mediaH.requestUpload)))
+	mux.Handle("PUT /v1/spaces/{id}/media/order", authed(http.HandlerFunc(mediaH.reorder)))
+	mux.Handle("POST /v1/spaces/{id}/media/{mediaId}/confirm", authed(http.HandlerFunc(mediaH.confirm)))
+	mux.Handle("DELETE /v1/spaces/{id}/media/{mediaId}", authed(http.HandlerFunc(mediaH.remove)))
 
-	mux.HandleFunc("GET /v1/space-types", lh.spaceTypes)
-	mux.HandleFunc("GET /v1/listings/{slug}", lh.getPublic)
+	// mux.HandleFunc("GET /v1/space-types", lh.spaceTypes)
+	// mux.HandleFunc("GET /v1/listings/{slug}", lh.getPublic)
 
-	mux.Handle("POST /v1/spaces", authed(http.HandlerFunc(lh.create)))
+	// mux.Handle("POST /v1/spaces", authed(http.HandlerFunc(lh.create)))
 	mux.Handle("GET /v1/spaces", authed(http.HandlerFunc(lh.list)))
 	mux.Handle("GET /v1/spaces/{id}", authed(http.HandlerFunc(lh.getOwn)))
 	mux.Handle("PATCH /v1/spaces/{id}", authed(http.HandlerFunc(lh.patch)))
@@ -130,15 +132,15 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("PUT /v1/payouts/account", hostOnly(poh.saveAccount))
 	mux.Handle("GET /v1/payouts/balance", hostOnly(poh.balance))
 	mux.Handle("GET /v1/payouts", hostOnly(poh.list))
-	mux.Handle("POST /v1/payouts", hostOnly(poh.request))
+	// mux.Handle("POST /v1/payouts", hostOnly(poh.request))
 
 	mux.Handle("GET /healthz", handleLive(d.Version, d.Commit))
 	mux.Handle("GET /readyz", handleReady(d.Pool, d.PingTimeout))
 
-	mux.HandleFunc("POST /v1/auth/otp", auth.requestOTP)
-	mux.HandleFunc("POST /v1/auth/verify", auth.verifyOTP)
-	mux.HandleFunc("POST /v1/auth/refresh", auth.refresh)
-	mux.HandleFunc("POST /v1/auth/logout", auth.logout)
+	// mux.HandleFunc("POST /v1/auth/otp", auth.requestOTP)
+	// mux.HandleFunc("POST /v1/auth/verify", auth.verifyOTP)
+	// mux.HandleFunc("POST /v1/auth/refresh", auth.refresh)
+	// mux.HandleFunc("POST /v1/auth/logout", auth.logout)
 
 	mux.Handle("GET /v1/me", RequireAuth(d.Tokens)(http.HandlerFunc(auth.me)))
 	mux.Handle("GET /.well-known/space-jwks.json", publicKeyHandler(d.Tokens))
@@ -147,8 +149,8 @@ func NewRouter(d Deps) http.Handler {
 		WriteProblem(w, r, Problem{Status: http.StatusNotFound, Title: "not found"})
 	}))
 
-	mux.HandleFunc("GET /v1/listings/{slug}/quote", ch.quote)
-	mux.HandleFunc("GET /v1/listings/{slug}/calendar", ch.publicCalendar)
+	// mux.HandleFunc("GET /v1/listings/{slug}/quote", ch.quote)
+	// mux.HandleFunc("GET /v1/listings/{slug}/calendar", ch.publicCalendar)
 
 	mux.Handle("GET /v1/spaces/{id}/rules", authed(http.HandlerFunc(ch.getRules)))
 	mux.Handle("PUT /v1/spaces/{id}/rules", authed(http.HandlerFunc(ch.setRules)))
@@ -159,7 +161,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /v1/spaces/{id}/blocks", authed(http.HandlerFunc(ch.createBlock)))
 	mux.Handle("DELETE /v1/spaces/{id}/blocks/{blockId}", authed(http.HandlerFunc(ch.deleteBlock)))
 
-	mux.Handle("POST /v1/bookings", authed(http.HandlerFunc(bh.create)))
+	// mux.Handle("POST /v1/bookings", authed(http.HandlerFunc(bh.create)))
 	mux.Handle("GET /v1/bookings", authed(http.HandlerFunc(bh.list)))
 	mux.Handle("GET /v1/bookings/{id}", authed(http.HandlerFunc(bh.get)))
 	mux.Handle("GET /v1/bookings/{id}/refund-quote", authed(http.HandlerFunc(bh.refundQuote)))
@@ -189,8 +191,10 @@ func NewRouter(d Deps) http.Handler {
 		CORS(d.CORSOrigins),
 		SecurityHeaders,
 		Logger(d.Logger),
+		// Metrics(d.Metrics),
 		Recover,
 		Timeout(d.RequestTimeout),
 		MaxBytes(d.MaxBodyBytes),
+		Metrics(d.Metrics),
 	)
 }

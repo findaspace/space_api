@@ -9,7 +9,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: help up down build run migrate test lint tidy generate
+.PHONY: help up stop down build run worker migrate test itest test-integration lint tidy generate secrets loadtest
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "%-10s %s\n", $$1, $$2}'
@@ -55,3 +55,6 @@ itest: ## run every test, integration included
 
 worker:
 	go run ./cmd/worker/
+
+loadtest:
+	k6 run -e API=$(API) -e TOKEN=$(TOKEN) -e SPACE=$(SPACE) loadtest/booking.js

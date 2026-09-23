@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samnart1/space_api/internal/platform/metrics"
 	"github.com/samnart1/space_api/internal/platform/ratelimit"
 	"github.com/samnart1/space_api/internal/platform/telemetry"
 )
@@ -247,4 +248,44 @@ func ClientKey(trustProxy bool) func(*http.Request) string {
 
 func IPKey(trustProxy bool) func(*http.Request) string {
 	return func(r *http.Request) string { return "ip:" + ClientIP(r, trustProxy) }
+}
+
+// Metrics records latency and size per route template. The label comes from
+// r.Pattern, which the mux sets on this same request while the handler runs,
+// so it is only readable after next.ServeHTTP returns.
+func Metrics(m *metrics.Metrics) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			m.RequestsInFlight.Inc()
+			defer m.RequestsInFlight.Dec()
+
+			rw := &responseWriter{ResponseWriter: w}
+			next.ServeHTTP(rw, r)
+
+			if rw.status == 0 {
+				rw.status = http.StatusOK
+			}
+
+			// An unmatched request has no pattern. Bucketing those under a
+			// constant is what keeps a 404 scanner from creating a million
+			// label values.
+			route := r.Pattern
+			if route == "" {
+				route = "unmatched"
+			}
+
+			m.RequestDuration.WithLabelValues(
+				route, r.Method, statusClass(rw.status),
+			).Observe(time.Since(start).Seconds())
+
+			m.ResponseBytes.WithLabelValues(route).Observe(float64(rw.bytes))
+		})
+	}
+}
+
+// statusClass collapses codes to 2xx, 4xx and so on. The exact code belongs in
+// the log line; a histogram needs one label value per class, not per code.
+func statusClass(status int) string {
+	return strconv.Itoa(status/100) + "xx"
 }

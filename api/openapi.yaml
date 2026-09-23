@@ -1,0 +1,126 @@
+openapi: 3.1.0
+info:
+  title: Space API
+  version: 1.0.0
+  description: |
+    Marketplace for renting rooms, apartments, shops and other spaces in Ghana.
+
+    Money is always an integer in the currency's minor unit (pesewas for GHS).
+    Dates in a booking context are calendar dates, not instants.
+    Every error is an RFC 9457 problem document.
+
+servers:
+  - url: https://api.space.gh/v1
+  - url: http://localhost:8080/v1
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        EdDSA access token, 15 minute lifetime. The public key is published at
+        /.well-known/space-jwks.json so servers can verify without a round trip.
+
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, default: "about:blank" }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        trace_id:
+          type: string
+          description: Matches request_id in the server logs. Quote it in support requests.
+        errors:
+          type: array
+          items: { $ref: "#/components/schemas/FieldError" }
+
+    FieldError:
+      type: object
+      required: [field, code]
+      properties:
+        field: { type: string }
+        code: { type: string, examples: [required, invalid, range, option] }
+        detail: { type: string }
+
+    Money:
+      type: integer
+      format: int64
+      description: Minor units. 450000 is GHS 4,500.00. Never a decimal.
+
+    RentalMode:
+      type: string
+      enum: [nightly, term]
+      description: |
+        nightly is a short stay with a date calendar. term is a lease with
+        monthly rent, a deposit and rent in advance. They have different
+        booking state machines.
+
+  responses:
+    Problem:
+      description: RFC 9457 problem document
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+      description: |
+        Opaque keyset cursor from the previous page's next_cursor. Offset
+        pagination is not supported: it skips and repeats rows when the
+        underlying set changes between pages.
+
+paths:
+  /search:
+    get:
+      summary: Search published listings
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: lat, in: query, schema: { type: number, format: double } }
+        - { name: lng, in: query, schema: { type: number, format: double } }
+        - { name: radius_m, in: query, schema: { type: integer, maximum: 100000 } }
+        - { name: check_in, in: query, schema: { type: string, format: date } }
+        - { name: check_out, in: query, schema: { type: string, format: date } }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [relevance, price_asc, price_desc, distance, newest]
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of results
+        "422": { $ref: "#/components/responses/Problem" }
+
+  /bookings:
+    post:
+      summary: Hold a booking
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema: { type: string }
+          description: |
+            Scoped per guest. Repeating a key returns the original booking
+            rather than creating a second one.
+      responses:
+        "201": { description: Held }
+        "409":
+          description: |
+            The dates were taken between the quote and the request. Enforced by
+            a database exclusion constraint, so this is authoritative.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }

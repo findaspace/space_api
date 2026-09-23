@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"github.com/samnart1/space_api/internal/notify"
 	"github.com/samnart1/space_api/internal/payment"
 	"github.com/samnart1/space_api/internal/payout"
+	"github.com/samnart1/space_api/internal/platform/metrics"
 	"github.com/samnart1/space_api/internal/platform/objectstore"
 	"github.com/samnart1/space_api/internal/platform/paystack"
 	"github.com/samnart1/space_api/internal/platform/postgres"
@@ -186,6 +188,14 @@ func run() error {
 		return ratelimit.Tier{PerMin: perMin, Burst: burst}
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
+		resp, err := http.Get("http://127.0.0.1:8080/healthz")
+		if err != nil || resp.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	// A disabled limiter is a very high one rather than a nil check at every
 	// call site: one code path, and the switch cannot be half-applied.
 	scale := 1
@@ -204,6 +214,14 @@ func run() error {
 		limits.Read.Close()
 		limits.Write.Close()
 		limits.Webhook.Close()
+	}()
+
+	met := metrics.New("api")
+	met.WatchPool(pool)
+	go func() {
+		if err := met.Serve(ctx, cfg.MetricsAddr, log); err != nil {
+			log.Error("metrics server stopped", slog.Any("error", err))
+		}
 	}()
 
 	router := httpapi.NewRouter(httpapi.Deps{
@@ -229,6 +247,7 @@ func run() error {
 		Limits:         limits,
 		CORSOrigins:    cfg.CORSOrigins,
 		RequestTimeout: cfg.RequestTimeout,
+		Metrics:        met,
 	})
 
 	log.Info("paystack configured",
