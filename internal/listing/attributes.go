@@ -20,14 +20,20 @@ const (
 // Field is one attribute definition. It is the single source of truth for
 // server validation, the client's form renderer, and the search filter list.
 type Field struct {
-	Key      string    `json:"key"`
-	Label    string    `json:"label"`
-	Kind     FieldKind `json:"kind"`
-	Required bool      `json:"required"`
-	Unit     string    `json:"unit,omitempty"`
-	Min      *float64  `json:"min,omitempty"`
-	Max      *float64  `json:"max,omitempty"`
-	Options  []string  `json:"options,omitempty"`
+	Key   string    `json:"key"`
+	Label string    `json:"label"`
+	Kind  FieldKind `json:"kind"`
+
+	// Weight is how much this field moves the completeness score, and the order
+	// in which a host is prompted for what is missing. It gates nothing: a
+	// listing publishes without any of them.
+	Weight int `json:"weight"`
+
+	Unit    string   `json:"unit,omitempty"`
+	Min     *float64 `json:"min,omitempty"`
+	Max     *float64 `json:"max,omitempty"`
+	Options []string `json:"options,omitempty"`
+
 	// Filterable marks fields the search endpoint accepts as query parameters.
 	Filterable bool `json:"filterable"`
 }
@@ -67,33 +73,33 @@ func join(groups ...[]Field) []Field {
 
 // Utilities that a Ghanaian renter asks about before anything else. Mains water
 // and grid power are both unreliable enough that omitting these turns every
-// enquiry into a phone call.
+// enquiry into a phone call, which is why they carry the top weight.
 var utilityFields = []Field{
-	{Key: "water_source", Label: "Water source", Kind: KindEnum, Required: true, Filterable: true,
+	{Key: "water_source", Label: "Water source", Kind: KindEnum, Weight: 3, Filterable: true,
 		Options: []string{"pipe", "borehole", "tanker", "well"}},
-	{Key: "power_backup", Label: "Power backup", Kind: KindEnum, Required: true, Filterable: true,
+	{Key: "power_backup", Label: "Power backup", Kind: KindEnum, Weight: 3, Filterable: true,
 		Options: []string{"none", "generator", "inverter", "solar"}},
 }
 
 var residentialFields = []Field{
-	{Key: "bedrooms", Label: "Bedrooms", Kind: KindInt, Required: true, Filterable: true, Min: n(0), Max: n(50)},
-	{Key: "bathrooms", Label: "Bathrooms", Kind: KindInt, Required: true, Filterable: true, Min: n(0), Max: n(50)},
-	{Key: "self_contained", Label: "Self contained", Kind: KindBool, Required: true, Filterable: true},
-	{Key: "furnishing", Label: "Furnishing", Kind: KindEnum, Required: true, Filterable: true,
+	{Key: "bedrooms", Label: "Bedrooms", Kind: KindInt, Weight: 3, Filterable: true, Min: n(0), Max: n(50)},
+	{Key: "bathrooms", Label: "Bathrooms", Kind: KindInt, Weight: 2, Filterable: true, Min: n(0), Max: n(50)},
+	{Key: "self_contained", Label: "Self contained", Kind: KindBool, Weight: 3, Filterable: true},
+	{Key: "furnishing", Label: "Furnishing", Kind: KindEnum, Weight: 2, Filterable: true,
 		Options: []string{"unfurnished", "semi_furnished", "fully_furnished"}},
-	{Key: "kitchen", Label: "Kitchen", Kind: KindEnum, Required: true, Filterable: true,
+	{Key: "kitchen", Label: "Kitchen", Kind: KindEnum, Weight: 2, Filterable: true,
 		Options: []string{"none", "shared", "private"}},
-	{Key: "floor_area_sqm", Label: "Floor area", Kind: KindFloat, Unit: "m2", Min: n(1), Max: n(100000)},
+	{Key: "floor_area_sqm", Label: "Floor area", Kind: KindFloat, Weight: 1, Unit: "m2", Min: n(1), Max: n(100000)},
 }
 
 var commercialFields = []Field{
-	{Key: "floor_area_sqm", Label: "Floor area", Kind: KindFloat, Required: true, Filterable: true, Unit: "m2", Min: n(1), Max: n(500000)},
-	{Key: "frontage_m", Label: "Frontage", Kind: KindFloat, Unit: "m", Min: n(0), Max: n(1000)},
-	{Key: "storefront", Label: "Has storefront", Kind: KindBool, Filterable: true},
-	{Key: "ceiling_height_m", Label: "Ceiling height", Kind: KindFloat, Unit: "m", Min: n(1), Max: n(50)},
-	{Key: "power_phase", Label: "Power phase", Kind: KindEnum, Filterable: true,
+	{Key: "floor_area_sqm", Label: "Floor area", Kind: KindFloat, Weight: 3, Filterable: true, Unit: "m2", Min: n(1), Max: n(500000)},
+	{Key: "frontage_m", Label: "Frontage", Kind: KindFloat, Weight: 1, Unit: "m", Min: n(0), Max: n(1000)},
+	{Key: "storefront", Label: "Has storefront", Kind: KindBool, Weight: 2, Filterable: true},
+	{Key: "ceiling_height_m", Label: "Ceiling height", Kind: KindFloat, Weight: 1, Unit: "m", Min: n(1), Max: n(50)},
+	{Key: "power_phase", Label: "Power phase", Kind: KindEnum, Weight: 2, Filterable: true,
 		Options: []string{"single", "three"}},
-	{Key: "loading_access", Label: "Loading access", Kind: KindEnum,
+	{Key: "loading_access", Label: "Loading access", Kind: KindEnum, Weight: 1,
 		Options: []string{"none", "van", "truck", "container"}},
 }
 
@@ -110,10 +116,11 @@ var schemas = map[SpaceType]TypeSchema{
 		Fields: join(residentialFields, utilityFields)},
 	TypeBoysQuarters: {Label: "Boys quarters", Modes: []RentalMode{ModeNightly, ModeTerm},
 		Fields: join(residentialFields, utilityFields)},
+
 	TypeHostelBed: {Label: "Hostel bed", Modes: []RentalMode{ModeNightly, ModeTerm},
 		Fields: join(utilityFields, []Field{
-			{Key: "beds_in_room", Label: "Beds in room", Kind: KindInt, Required: true, Filterable: true, Min: n(1), Max: n(20)},
-			{Key: "gender_policy", Label: "Gender policy", Kind: KindEnum, Required: true, Filterable: true,
+			{Key: "beds_in_room", Label: "Beds in room", Kind: KindInt, Weight: 3, Filterable: true, Min: n(1), Max: n(20)},
+			{Key: "gender_policy", Label: "Gender policy", Kind: KindEnum, Weight: 3, Filterable: true,
 				Options: []string{"mixed", "male_only", "female_only"}},
 		})},
 
@@ -123,26 +130,26 @@ var schemas = map[SpaceType]TypeSchema{
 
 	TypeEventSpace: {Label: "Event space", Modes: []RentalMode{ModeNightly},
 		Fields: join(utilityFields, []Field{
-			{Key: "capacity", Label: "Capacity", Kind: KindInt, Required: true, Filterable: true, Min: n(1), Max: n(100000)},
-			{Key: "indoor", Label: "Indoor", Kind: KindBool, Required: true, Filterable: true},
-			{Key: "has_stage", Label: "Has stage", Kind: KindBool},
-			{Key: "parking_spaces", Label: "Parking spaces", Kind: KindInt, Min: n(0), Max: n(5000)},
+			{Key: "capacity", Label: "Capacity", Kind: KindInt, Weight: 3, Filterable: true, Min: n(1), Max: n(100000)},
+			{Key: "indoor", Label: "Indoor", Kind: KindBool, Weight: 2, Filterable: true},
+			{Key: "has_stage", Label: "Has stage", Kind: KindBool, Weight: 1},
+			{Key: "parking_spaces", Label: "Parking spaces", Kind: KindInt, Weight: 1, Min: n(0), Max: n(5000)},
 		})},
 
 	TypeLand: {Label: "Land", Modes: []RentalMode{ModeTerm},
 		Fields: []Field{
-			{Key: "plot_size_acres", Label: "Plot size", Kind: KindFloat, Required: true, Filterable: true, Unit: "acres", Min: n(0.01), Max: n(10000)},
-			{Key: "title_type", Label: "Title type", Kind: KindEnum, Required: true, Filterable: true,
+			{Key: "plot_size_acres", Label: "Plot size", Kind: KindFloat, Weight: 3, Filterable: true, Unit: "acres", Min: n(0.01), Max: n(10000)},
+			{Key: "title_type", Label: "Title type", Kind: KindEnum, Weight: 3, Filterable: true,
 				Options: []string{"freehold", "leasehold", "family", "stool"}},
-			{Key: "serviced", Label: "Serviced", Kind: KindBool, Filterable: true},
-			{Key: "zoning", Label: "Zoning", Kind: KindEnum, Filterable: true,
+			{Key: "serviced", Label: "Serviced", Kind: KindBool, Weight: 2, Filterable: true},
+			{Key: "zoning", Label: "Zoning", Kind: KindEnum, Weight: 2, Filterable: true,
 				Options: []string{"residential", "commercial", "agricultural", "industrial", "mixed"}},
 		}},
 
 	TypeParking: {Label: "Parking", Modes: []RentalMode{ModeNightly, ModeTerm},
 		Fields: []Field{
-			{Key: "covered", Label: "Covered", Kind: KindBool, Required: true, Filterable: true},
-			{Key: "vehicle_size", Label: "Largest vehicle", Kind: KindEnum, Required: true, Filterable: true,
+			{Key: "covered", Label: "Covered", Kind: KindBool, Weight: 3, Filterable: true},
+			{Key: "vehicle_size", Label: "Largest vehicle", Kind: KindEnum, Weight: 3, Filterable: true,
 				Options: []string{"motorbike", "saloon", "suv", "van", "truck"}},
 		}},
 }
@@ -171,10 +178,12 @@ func Schemas() []TypeSchema {
 	return out
 }
 
-// Validate checks attributes against the schema for a type, and returns the
-// normalized map to store. Unknown keys are an error, not something to ignore:
-// silently dropping a field the client sent means the host thinks they set
-// something they did not.
+// Validate checks whatever attributes were supplied and returns the normalized
+// map to store. Nothing is mandatory: a host publishes with none of them, and
+// what they skip lowers their completeness score instead of blocking them.
+//
+// Unknown keys are still an error. Silently dropping a field the client sent
+// means the host thinks they set something they did not.
 func Validate(t SpaceType, mode RentalMode, attrs map[string]any) (map[string]any, error) {
 	schema, ok := SchemaFor(t)
 	if !ok {
@@ -197,9 +206,6 @@ func Validate(t SpaceType, mode RentalMode, attrs map[string]any) (map[string]an
 
 		raw, present := attrs[f.Key]
 		if !present || raw == nil {
-			if f.Required {
-				issues = append(issues, FieldIssue{Field: f.Key, Code: "required"})
-			}
 			continue
 		}
 
@@ -278,9 +284,6 @@ func coerce(f Field, raw any) (any, *FieldIssue) {
 			return bad("type", "expected a string")
 		}
 		v = strings.TrimSpace(v)
-		if v == "" && f.Required {
-			return bad("required", "")
-		}
 		if len(v) > 500 {
 			return bad("range", "maximum length is 500")
 		}

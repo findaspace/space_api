@@ -166,7 +166,7 @@ func TestDiscountDoesNotApplyToCleaningFee(t *testing.T) {
 func TestPlatformFeeIsIntegerMath(t *testing.T) {
 	in := baseInput()
 	in.Space.BasePriceMinor = 3333
-	in.PlatformFeeBps = 333 // 3.33%
+	in.Fees = FeeConfig{NightlyBps: 333}
 
 	q, err := QuoteNightly(in)
 	if err != nil {

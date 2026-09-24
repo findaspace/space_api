@@ -45,3 +45,13 @@ func (RevealReviewsArgs) Kind() string { return "reveal_reviews" }
 type RefreshSearchStatsArgs struct{}
 
 func (RefreshSearchStatsArgs) Kind() string { return "refresh_search_stats" }
+
+type RouteListingArgs struct {
+	SpaceID uuid.UUID `json:"space_id"`
+}
+
+func (RouteListingArgs) Kind() string { return "route_listing" }
+
+type BackfillRoutesArgs struct{}
+
+func (BackfillRoutesArgs) Kind() string { return "backfill_routes" }

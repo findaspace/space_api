@@ -2,7 +2,7 @@ package listing
 
 import (
 	"context"
-	"errors"
+	// "errors"
 	"strings"
 
 	"github.com/google/uuid"
@@ -16,18 +16,23 @@ type RoleGranter interface {
 	GrantHost(ctx context.Context, userID uuid.UUID) error
 }
 
+type Router interface {
+	EnqueueRoute(ctx context.Context, spaceID uuid.UUID) error
+}
+
 type MediaCounter interface {
 	CountReady(ctx context.Context, spaceID uuid.UUID) (int, error)
 }
 
 type Service struct {
-	store *Store
-	roles RoleGranter
-	media MediaCounter
+	store  *Store
+	roles  RoleGranter
+	media  MediaCounter
+	routes Router
 }
 
-func NewService(store *Store, roles RoleGranter, media MediaCounter) *Service {
-	return &Service{store: store, roles: roles, media: media}
+func NewService(store *Store, roles RoleGranter, media MediaCounter, routes Router) *Service {
+	return &Service{store: store, roles: roles, media: media, routes: routes}
 }
 
 // AssertHostOwns satisfies media.SpaceOwnership.
@@ -164,6 +169,11 @@ func (s *Service) Publish(ctx context.Context, id uuid.UUID) (Space, error) {
 	if err := s.checkReady(ctx, current); err != nil {
 		return Space{}, err
 	}
+	if s.routes != nil {
+		if err := s.routes.EnqueueRoute(ctx, id); err != nil {
+			_ = err
+		}
+	}
 	return s.store.SetStatus(ctx, id, current.Status, StatusPublished)
 }
 
@@ -178,29 +188,18 @@ func (s *Service) hostTransition(ctx context.Context, id, hostID uuid.UUID, to S
 	return s.store.SetStatus(ctx, id, current.Status, to)
 }
 
-// checkReady runs at submit and again at publish. A draft can sit for weeks
-// while the attribute schema gains a required field, so validating only at
-// write time publishes listings that no longer satisfy their own schema.
-// Phase 3c adds the photo requirement here.
+// checkReady is the minimum a listing needs to be worth showing to a stranger:
+// somewhere to go, a price, and one photograph of it. Everything else the old
+// version demanded now feeds the completeness score instead, because a
+// half-finished real listing beats a perfect one nobody created.
 func (s *Service) checkReady(ctx context.Context, sp Space) error {
 	var issues []FieldIssue
 
-	if len(strings.TrimSpace(sp.Description)) < minDescriptionLen {
-		issues = append(issues, FieldIssue{
-			Field: "description", Code: "too_short",
-			Detail: "describe the space in at least 40 characters",
-		})
-	}
 	if sp.Location.Locality == "" {
 		issues = append(issues, FieldIssue{Field: "location.locality", Code: "required"})
 	}
-	if _, err := Validate(sp.Type, sp.Mode, sp.Attributes); err != nil {
-		var ve *ValidationError
-		if errors.As(err, &ve) {
-			issues = append(issues, ve.Issues...)
-		} else {
-			return err
-		}
+	if sp.BasePriceMinor <= 0 {
+		issues = append(issues, FieldIssue{Field: "base_price_minor", Code: "required"})
 	}
 
 	photos, err := s.media.CountReady(ctx, sp.ID)
@@ -218,6 +217,23 @@ func (s *Service) checkReady(ctx context.Context, sp Space) error {
 		return &ValidationError{Issues: issues}
 	}
 	return nil
+}
+
+func (s *Service) Completeness(ctx context.Context, id, hostID uuid.UUID) (int, []Gap, error) {
+	sp, err := s.store.GetForHost(ctx, id, hostID)
+	if err != nil {
+		return 0, nil, err
+	}
+	photos, err := s.media.CountReady(ctx, sp.ID)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	score, gaps := Score(Inputs{
+		Type: sp.Type, Attributes: sp.Attributes,
+		Description: sp.Description, PhotoCount: photos,
+	})
+	return score, gaps, nil
 }
 
 func defaultString(v, def string) string {

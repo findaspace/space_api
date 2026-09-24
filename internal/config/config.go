@@ -53,7 +53,7 @@ type Config struct {
 	MediaMaxBytes        int64
 	MediaMaxPerSpace     int
 
-	PlatformFeeBps int
+	// PlatformFeeBps int
 
 	BookingHoldTTL time.Duration
 
@@ -79,6 +79,17 @@ type Config struct {
 	DBStatementCache int
 
 	MetricsAddr string
+
+	FeeNightlyBps    int
+	FeeTermBps       int
+	FeeTermCapMonths int
+	FeeMinMinor      int64
+
+	OSRMBaseURL     string
+	OSRMProfile     string
+	OSRMTimeout     time.Duration
+	GeoRadiusM      int
+	GeoMaxLandmarks int
 }
 
 func (c Config) IsProduction() bool {
@@ -213,7 +224,7 @@ func Load() (Config, error) {
 		MediaMaxBytes:        l.int64("SPACE_MEDIA_MAX_BYTES", 10<<20),
 		MediaMaxPerSpace:     l.int("SPACE_MEDIA_MAX_PER_SPACE", 20),
 
-		PlatformFeeBps: l.int("SPACE_PLATFORM_FEE_BPS", 1000),
+		// PlatformFeeBps: l.int("SPACE_PLATFORM_FEE_BPS", 1000),
 
 		BookingHoldTTL: l.duration("SPACE_BOOKING_HOLD_TTL", 30*time.Minute),
 
@@ -238,6 +249,17 @@ func Load() (Config, error) {
 		DBStatementCache: l.int("SPACE_DB_STATEMENT_CACHE", 512),
 
 		MetricsAddr: l.str("SPACE_METRICS_ADDR", ":9091"),
+
+		FeeNightlyBps:    l.int("SPACE_FEE_NIGHTLY_BPS", 1000),
+		FeeTermBps:       l.int("SPACE_FEE_TERM_BPS", 1000),
+		FeeTermCapMonths: l.int("SPACE_FEE_TERM_CAP_MONTHS", 1),
+		FeeMinMinor:      l.int64("SPACE_FEE_MIN_MINOR", 2000),
+
+		OSRMBaseURL:     l.str("SPACE_OSRM_URL", "http://localhost:5000"),
+		OSRMProfile:     l.str("SPACE_OSRM_PROFILE", "foot"),
+		OSRMTimeout:     l.duration("SPACE_OSRM_TIMEOUT", 10*time.Second),
+		GeoRadiusM:      l.int("SPACE_GEO_RADIUS_M", 5000),
+		GeoMaxLandmarks: l.int("SPACE_GEO_MAX_LANDMARKS", 12),
 	}
 
 	var problems []string

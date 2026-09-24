@@ -9,6 +9,7 @@ import (
 	"github.com/samnart1/space_api/internal/booking"
 	"github.com/samnart1/space_api/internal/calendar"
 	"github.com/samnart1/space_api/internal/identity"
+	"github.com/samnart1/space_api/internal/jobs"
 	"github.com/samnart1/space_api/internal/listing"
 	"github.com/samnart1/space_api/internal/payment"
 )
@@ -36,6 +37,12 @@ func (s spaceSource) BookableSpace(ctx context.Context, spaceID uuid.UUID) (book
 type pricer struct {
 	listings  *listing.Service
 	calendars *calendar.Service
+}
+
+type routeQueue struct{ queue *jobs.Enqueuer }
+
+func (r routeQueue) EnqueueRoute(ctx context.Context, spaceID uuid.UUID) error {
+	return r.queue.Insert(ctx, jobs.RouteListingArgs{SpaceID: spaceID})
 }
 
 type phoneSource struct{ identity *identity.Service }

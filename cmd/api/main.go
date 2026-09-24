@@ -13,6 +13,7 @@ import (
 	"github.com/samnart1/space_api/internal/booking"
 	"github.com/samnart1/space_api/internal/calendar"
 	"github.com/samnart1/space_api/internal/config"
+	"github.com/samnart1/space_api/internal/geo"
 	"github.com/samnart1/space_api/internal/identity"
 	"github.com/samnart1/space_api/internal/jobs"
 	"github.com/samnart1/space_api/internal/listing"
@@ -23,6 +24,7 @@ import (
 	"github.com/samnart1/space_api/internal/payout"
 	"github.com/samnart1/space_api/internal/platform/metrics"
 	"github.com/samnart1/space_api/internal/platform/objectstore"
+	"github.com/samnart1/space_api/internal/platform/osrm"
 	"github.com/samnart1/space_api/internal/platform/paystack"
 	"github.com/samnart1/space_api/internal/platform/postgres"
 	"github.com/samnart1/space_api/internal/platform/ratelimit"
@@ -123,13 +125,22 @@ func run() error {
 		}
 	}
 
-	mediaStore := media.NewStore(pool)
-	listingSvc := listing.NewService(listing.NewStore(pool), identitySvc, mediaStore)
-
 	enqueuer, err := jobs.NewEnqueuer(pool)
 	if err != nil {
 		return err
 	}
+
+	osrmClient := osrm.New(cfg.OSRMBaseURL, cfg.OSRMProfile, cfg.OSRMTimeout)
+
+	geoSvc := geo.NewService(geo.NewStore(pool), osrmClient, log, geo.ServiceConfig{
+		// RadiusM:        cfg.GeoRadiusM,
+		RadiusM:        3000,
+		MaxLandmarks:   cfg.GeoMaxLandmarks,
+		MaxWalkSeconds: 2700,
+	})
+
+	mediaStore := media.NewStore(pool)
+	listingSvc := listing.NewService(listing.NewStore(pool), identitySvc, mediaStore, routeQueue{queue: enqueuer})
 
 	mediaSvc := media.NewService(mediaStore, objects, listingSvc, enqueuer, log, media.ServiceConfig{
 		MaxBytes:    cfg.MediaMaxBytes,
@@ -137,9 +148,13 @@ func run() error {
 	})
 
 	calendarSvc := calendar.NewService(calendar.NewStore(pool), calendar.ServiceConfig{
-		PlatformFeeBps: cfg.PlatformFeeBps,
+		Fees: calendar.FeeConfig{
+			NightlyBps:    cfg.FeeNightlyBps,
+			TermBps:       cfg.FeeTermBps,
+			TermCapMonths: cfg.FeeTermCapMonths,
+			MinMinor:      cfg.FeeMinMinor,
+		},
 	})
-
 	bookingSvc := booking.NewService(
 		booking.NewStore(pool),
 		spaceSource{listings: listingSvc},
@@ -248,6 +263,7 @@ func run() error {
 		CORSOrigins:    cfg.CORSOrigins,
 		RequestTimeout: cfg.RequestTimeout,
 		Metrics:        met,
+		Geo:            geoSvc,
 	})
 
 	log.Info("paystack configured",

@@ -60,6 +60,7 @@ type Deps struct {
 	Log           *slog.Logger
 	StuckAfter    time.Duration
 	Search        SearchIndexer
+	Routes        ListingRouter
 }
 
 type ProcessMediaWorker struct {
@@ -172,6 +173,11 @@ type AdvanceBookingsWorker struct {
 	deps Deps
 }
 
+type ListingRouter interface {
+	Compute(ctx context.Context, spaceID uuid.UUID) error
+	Backfill(ctx context.Context, limit int32) (int, error)
+}
+
 func (w *AdvanceBookingsWorker) Work(ctx context.Context, job *river.Job[AdvanceBookingsArgs]) error {
 	started, completed, err := w.deps.Advancer.Advance(ctx)
 	if err != nil {
@@ -212,6 +218,8 @@ func Register(deps Deps) (*river.Workers, error) {
 	river.AddWorker(workers, &AdvanceBookingsWorker{deps: deps})
 	river.AddWorker(workers, &RevealReviewsWorker{deps: deps})
 	river.AddWorker(workers, &RefreshSearchStatsWorker{deps: deps})
+	river.AddWorker(workers, &RouteListingWorker{deps: deps})
+	river.AddWorker(workers, &BackfillRoutesWorker{deps: deps})
 
 	return workers, nil
 }
@@ -233,5 +241,33 @@ func Periodic() []*river.PeriodicJob {
 		every(time.Hour, AdvanceBookingsArgs{}, true),
 		every(6*time.Hour, RevealReviewsArgs{}, false),
 		every(5*time.Minute, RefreshSearchStatsArgs{}, true),
+		every(15*time.Minute, BackfillRoutesArgs{}, true),
 	}
+}
+
+type RouteListingWorker struct {
+	river.WorkerDefaults[RouteListingArgs]
+	deps Deps
+}
+
+func (w *RouteListingWorker) Work(ctx context.Context, job *river.Job[RouteListingArgs]) error {
+	return w.deps.Routes.Compute(ctx, job.Args.SpaceID)
+}
+
+type BackfillRoutesWorker struct {
+	river.WorkerDefaults[BackfillRoutesArgs]
+	deps Deps
+}
+
+// Catches listings published while OSRM was down. Compute never errors on an
+// outage, so without this they would keep their straight-line distance forever.
+func (w *BackfillRoutesWorker) Work(ctx context.Context, job *river.Job[BackfillRoutesArgs]) error {
+	n, err := w.deps.Routes.Backfill(ctx, 100)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		w.deps.Log.InfoContext(ctx, "routed listings", slog.Int("count", n))
+	}
+	return nil
 }

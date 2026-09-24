@@ -92,6 +92,8 @@ func build(q Query) (string, []any) {
 			CASE WHEN s.review_count = 0 THEN 0
 			     ELSE round(s.rating_sum::numeric / s.review_count, 2)::float8 END AS rating,
 			COALESCE(cover.object_key, '') AS cover_key,
+			COALESCE(walk.name, '') AS landmark_name,
+			COALESCE(walk.walk_seconds, 0) AS walk_seconds,
 			%s AS distance_m,
 			EXTRACT(EPOCH FROM s.published_at)::bigint AS published_epoch,
 			%s AS score
@@ -102,9 +104,16 @@ func build(q Query) (string, []any) {
 			ORDER BY position, created_at
 			LIMIT 1
 		) cover ON true
+		LEFT JOIN LATERAL (
+			SELECT l.name, sl.walk_seconds
+			FROM space_landmarks sl
+			JOIN landmarks l ON l.id = sl.landmark_id
+			WHERE sl.space_id = s.id AND l.active
+			ORDER BY sl.walk_seconds
+			LIMIT 1
+		) walk ON true
 		WHERE %s`,
 		distanceExpr, scoreExpr, strings.Join(where, "\n  AND "))
-
 	outer := "SELECT * FROM (" + inner + "\n) q"
 
 	// The cursor compares the row value (sort key, id). Postgres evaluates that

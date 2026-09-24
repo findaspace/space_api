@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/samnart1/space_api/internal/platform/osrm"
 )
 
 type Store struct{ pool *pgxpool.Pool }
@@ -23,20 +24,30 @@ func (s *Store) Search(ctx context.Context, q Query) ([]Result, error) {
 	out := []Result{}
 	for rows.Next() {
 		var (
-			r        Result
-			distance *int
-			epoch    int64
+			r           Result
+			distance    *int
+			walkSeconds int
+			epoch       int64
 		)
 		if err := rows.Scan(
 			&r.ID, &r.Slug, &r.Title, &r.SpaceType, &r.RentalMode,
 			&r.PriceMinor, &r.Currency, &r.PricePeriod,
 			&r.Locality, &r.Latitude, &r.Longitude,
 			&r.PhotoCount, &r.ReviewCount, &r.Rating, &r.CoverKey,
+			&r.LandmarkName, &walkSeconds,
 			&distance, &epoch, &r.Score,
 		); err != nil {
 			return nil, fmt.Errorf("scan result: %w", err)
 		}
 		r.DistanceM = distance
+
+		// Zero means unrouted, not a zero-minute walk, so the minute
+		// conversion only runs when there is a real duration behind it.
+		if walkSeconds > 0 {
+			r.WalkMinutes = osrm.Minutes(walkSeconds)
+		} else {
+			r.LandmarkName = ""
+		}
 
 		// The cursor carries whatever the active sort ordered by, so the next
 		// page resumes from the right column without the client knowing which.

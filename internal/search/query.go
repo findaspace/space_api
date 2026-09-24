@@ -151,15 +151,19 @@ type Result struct {
 	Currency    string    `json:"currency"`
 	PricePeriod string    `json:"price_period"`
 	Locality    string    `json:"locality"`
-	Latitude    float64   `json:"latitude"`
-	Longitude   float64   `json:"longitude"`
-	PhotoCount  int       `json:"photo_count"`
-	CoverKey    string    `json:"-"`
-	CoverURL    string    `json:"cover_url,omitempty"`
-	Rating      float64   `json:"rating,omitempty"`
-	ReviewCount int       `json:"review_count"`
-	DistanceM   *int      `json:"distance_m,omitempty"`
-	Score       int64     `json:"-"`
+
+	LandmarkName string `json:"landmark_name,omitempty"`
+	WalkMinutes  int    `json:"walk_minutes,omitempty"`
+
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+	PhotoCount  int     `json:"photo_count"`
+	CoverKey    string  `json:"-"`
+	CoverURL    string  `json:"cover_url,omitempty"`
+	Rating      float64 `json:"rating,omitempty"`
+	ReviewCount int     `json:"review_count"`
+	DistanceM   *int    `json:"distance_m,omitempty"`
+	Score       int64   `json:"-"`
 }
 
 type Page struct {

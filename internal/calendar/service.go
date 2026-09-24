@@ -10,7 +10,7 @@ import (
 const maxCalendarDays = 400
 
 type ServiceConfig struct {
-	PlatformFeeBps int
+	Fees FeeConfig
 }
 
 type Service struct {
@@ -74,7 +74,7 @@ func (s *Service) quoteNightly(ctx context.Context, sp SpacePricing, req QuoteRe
 	return QuoteNightly(NightlyInput{
 		Space: sp, CheckIn: checkIn, CheckOut: checkOut, Guests: guests,
 		Rules: rules, Plans: plans, Blocks: blocks,
-		PlatformFeeBps: s.cfg.PlatformFeeBps, Today: s.now(),
+		Fees: s.cfg.Fees, Today: s.now(),
 	})
 }
 
@@ -84,21 +84,21 @@ func (s *Service) quoteTerm(ctx context.Context, sp SpacePricing, req QuoteReque
 		return Quote{}, ErrInvalidRange
 	}
 
-	rules, err := s.store.Rules(ctx, sp.SpaceID)
-	if err != nil {
-		return Quote{}, err
-	}
-
 	end := start.AddDate(0, req.Months, 0)
 	blocks, err := s.store.BlocksInWindow(ctx, sp.SpaceID, start, end)
 	if err != nil {
 		return Quote{}, err
 	}
 
+	rules, err := s.store.Rules(ctx, sp.SpaceID)
+	if err != nil {
+		return Quote{}, err
+	}
+
 	return QuoteTerm(TermInput{
 		Space: sp, StartsOn: start, Months: req.Months, Blocks: blocks,
-		Policy:         rules.CancellationPolicy,
-		PlatformFeeBps: s.cfg.PlatformFeeBps, Today: s.now(),
+		Policy: rules.CancellationPolicy,
+		Fees:   s.cfg.Fees, Today: s.now(),
 	})
 }
 

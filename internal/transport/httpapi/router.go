@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/samnart1/space_api/internal/booking"
 	"github.com/samnart1/space_api/internal/calendar"
+	"github.com/samnart1/space_api/internal/geo"
 	"github.com/samnart1/space_api/internal/identity"
 	"github.com/samnart1/space_api/internal/listing"
 	"github.com/samnart1/space_api/internal/media"
@@ -45,6 +46,7 @@ type Deps struct {
 	CORSOrigins    []string
 	RequestTimeout time.Duration
 	Metrics        *metrics.Metrics
+	Geo            *geo.Service
 }
 
 type Limiters struct {
@@ -77,6 +79,7 @@ func NewRouter(d Deps) http.Handler {
 	nh := notifyHandler{svc: d.Notify}
 
 	mux.Handle("GET /v1/notifications", authed(http.HandlerFunc(nh.inbox)))
+
 	mux.Handle("POST /v1/notifications/read-all", authed(http.HandlerFunc(nh.markAllRead)))
 	mux.Handle("POST /v1/notifications/{id}/read", authed(http.HandlerFunc(nh.markRead)))
 	mux.Handle("PUT /v1/notifications/preferences", authed(http.HandlerFunc(nh.setPreference)))
@@ -87,15 +90,21 @@ func NewRouter(d Deps) http.Handler {
 	// mux.HandleFunc("POST /v1/webhooks/paystack", ph.webhook)
 
 	lh := listingHandler{svc: d.Listing}
+	geoH := geoHandler{svc: d.Geo, listings: d.Listing}
 
 	mediaH := mediaHandler{svc: d.Media, listings: d.Listing}
 
 	msgH := messagingHandler{svc: d.Messaging}
 	rh := reviewHandler{svc: d.Review, listings: d.Listing}
 
+	mux.Handle("GET /v1/listings/{slug}/walks", readLimit(http.HandlerFunc(geoH.forListing)))
+
 	// mux.Handle("POST /v1/spaces/{id}/messages", authed(http.HandlerFunc(msgH.send)))
 	mux.Handle("GET /v1/threads", authed(http.HandlerFunc(msgH.inbox)))
 	mux.Handle("GET /v1/threads/{id}/messages", authed(http.HandlerFunc(msgH.messages)))
+
+	mux.Handle("GET /v1/spaces/{id}/completeness", authed(http.HandlerFunc(lh.completeness)))
+
 	// mux.Handle("POST /v1/threads/{id}/messages", authed(http.HandlerFunc(msgH.reply)))
 	mux.Handle("POST /v1/threads/{id}/read", authed(http.HandlerFunc(msgH.markRead)))
 

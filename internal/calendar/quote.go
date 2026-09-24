@@ -59,15 +59,15 @@ func effectiveMinNights(rules StayRules, checkIn, checkOut time.Time, plans []Ra
 }
 
 type NightlyInput struct {
-	Space          SpacePricing
-	CheckIn        time.Time
-	CheckOut       time.Time
-	Guests         int
-	Rules          StayRules
-	Plans          []RatePlan
-	Blocks         []Block
-	PlatformFeeBps int
-	Today          time.Time
+	Space    SpacePricing
+	CheckIn  time.Time
+	CheckOut time.Time
+	Guests   int
+	Rules    StayRules
+	Plans    []RatePlan
+	Blocks   []Block
+	Fees     FeeConfig
+	Today    time.Time
 }
 
 func QuoteNightly(in NightlyInput) (Quote, error) {
@@ -129,7 +129,7 @@ func QuoteNightly(in NightlyInput) (Quote, error) {
 	discount := applyBps(subtotal, discountBps)
 
 	afterDiscount := subtotal - discount
-	platformFee := applyBps(afterDiscount+in.Rules.CleaningFeeMinor, in.PlatformFeeBps)
+	platformFee := NightlyFee(in.Fees, afterDiscount+in.Rules.CleaningFeeMinor)
 
 	lines := []Line{{
 		Code:        "nights",
@@ -166,13 +166,13 @@ func QuoteNightly(in NightlyInput) (Quote, error) {
 }
 
 type TermInput struct {
-	Space          SpacePricing
-	StartsOn       time.Time
-	Months         int
-	Blocks         []Block
-	PlatformFeeBps int
-	Today          time.Time
-	Policy         string
+	Space    SpacePricing
+	StartsOn time.Time
+	Months   int
+	Blocks   []Block
+	Policy   string
+	Fees     FeeConfig
+	Today    time.Time
 }
 
 // QuoteTerm prices a lease. The interesting number is not the total, it is
@@ -220,7 +220,7 @@ func QuoteTerm(in TermInput) (Quote, error) {
 
 	total := rent * int64(in.Months)
 	upfront := rent * int64(advance)
-	platformFee := applyBps(upfront, in.PlatformFeeBps)
+	platformFee := TermFee(in.Fees, rent, in.Months)
 
 	lines := []Line{
 		{Code: "rent", Label: "Monthly rent", AmountMinor: rent},

@@ -11,12 +11,14 @@ import (
 
 	"github.com/samnart1/space_api/internal/booking"
 	"github.com/samnart1/space_api/internal/config"
+	"github.com/samnart1/space_api/internal/geo"
 	"github.com/samnart1/space_api/internal/jobs"
 	"github.com/samnart1/space_api/internal/ledger"
 	"github.com/samnart1/space_api/internal/media"
 	"github.com/samnart1/space_api/internal/notify"
 	"github.com/samnart1/space_api/internal/payout"
 	"github.com/samnart1/space_api/internal/platform/objectstore"
+	"github.com/samnart1/space_api/internal/platform/osrm"
 	"github.com/samnart1/space_api/internal/platform/paystack"
 	"github.com/samnart1/space_api/internal/platform/sms"
 	"github.com/samnart1/space_api/internal/review"
@@ -65,6 +67,13 @@ func buildDeps(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *
 		return jobs.Deps{}, err
 	}
 
+	router := osrm.New(cfg.OSRMBaseURL, cfg.OSRMProfile, cfg.OSRMTimeout)
+	geoSvc := geo.NewService(geo.NewStore(pool), router, log, geo.ServiceConfig{
+		RadiusM:        cfg.GeoRadiusM,
+		MaxLandmarks:   cfg.GeoMaxLandmarks,
+		MaxWalkSeconds: 2700,
+	})
+
 	mediaSvc := media.NewService(media.NewStore(pool), objects, workerOnly{}, enqueuer, log,
 		media.ServiceConfig{MaxBytes: cfg.MediaMaxBytes, MaxPerSpace: cfg.MediaMaxPerSpace})
 
@@ -97,5 +106,6 @@ func buildDeps(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *
 		Reviews:       review.NewService(review.NewStore(pool)),
 		Notifications: notifySvc,
 		Search:        searchSvc,
+		Routes:        geoSvc,
 	}, nil
 }

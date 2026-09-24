@@ -35,6 +35,77 @@ services:
       timeout: 3s
       retries: 10
 
+
+
+   
+   
+  osrm-build:
+    build:
+      context: .
+      dockerfile: Dockerfile.osrm
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ ! -f /data/ghana-latest.osrm.mldgr ]; then
+          wget -O /data/ghana-latest.osm.pbf https://download.geofabrik.de/africa/ghana-latest.osm.pbf &&
+          osrm-extract -p /opt/foot.lua /data/ghana-latest.osm.pbf &&
+          osrm-partition /data/ghana-latest.osrm &&
+          osrm-customize /data/ghana-latest.osrm
+        fi
+    volumes:
+      - osrmdata:/data
+
+  osrm:
+    build:
+      context: .
+      dockerfile: Dockerfile.osrm
+    command:
+      - osrm-routed
+      - --algorithm=MLD
+      - --max-table-size=100
+      - /data/ghana-latest.osrm
+    depends_on:
+      osrm-build:
+        condition: service_completed_successfully
+    ports:
+      - "5000:5000"
+    volumes:
+      - osrmdata:/data
+
+
+
+        
+
+  # osrm-build:
+  #   image: ghcr.io/project-osrm/osrm-backend:latest
+  #   volumes:
+  #     - osrmdata:/data
+  #   entrypoint: >
+  #     /bin/sh -c "
+  #     if [ ! -f /data/ghana-latest.osrm.mldgr ]; then
+  #       wget -O /data/ghana-latest.osm.pbf https://download.geofabrik.de/africa/ghana-latest.osm.pbf &&
+  #       osrm-extract -p /opt/foot.lua /data/ghana-latest.osm.pbf &&
+  #       osrm-partition /data/ghana-latest.osrm &&
+  #       osrm-customize /data/ghana-latest.osrm;
+  #     fi
+  #     "
+  #
+  # osrm:
+  #   image: ghcr.io/project-osrm/osrm-backend:latest
+  #   depends_on:
+  #     osrm-build:
+  #       condition: service_completed_successfully
+  #   command: osrm-routed --algorithm=MLD --max-table-size=100 /data/ghana-latest.osrm
+  #   volumes:
+  #     - osrmdata:/data
+  #   ports:
+  #     - "5000:5000"
+
+
+
+
 volumes:
   pgdata:
   miniodata:
+  osrmdata:
