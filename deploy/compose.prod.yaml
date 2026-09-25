@@ -25,3 +25,7 @@ services:
     # safe, but there is no work here that needs them yet.
     deploy:
       replicas: 1
+
+  worker:
+    image: ghcr.io/samnart1/space_worker:${TAG:-latest}
+    command: []

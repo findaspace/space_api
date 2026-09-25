@@ -11,6 +11,7 @@ import (
 
 	"github.com/samnart1/space_api/internal/jobs"
 	"github.com/samnart1/space_api/internal/platform/objectstore"
+	"github.com/samnart1/space_api/internal/platform/transcode"
 )
 
 // SpaceOwnership is declared here so this package never imports listing.
@@ -28,8 +29,11 @@ type ObjectStore interface {
 }
 
 type ServiceConfig struct {
-	MaxBytes    int64
-	MaxPerSpace int
+	MaxBytes      int64
+	MaxPerSpace   int
+	UploadTTL     time.Duration
+	VideoMaxBytes int64
+	WorkDir       string
 }
 
 type Service struct {
@@ -37,12 +41,13 @@ type Service struct {
 	objects ObjectStore
 	spaces  SpaceOwnership
 	queue   *jobs.Enqueuer
+	video   *transcode.Runner
 	log     *slog.Logger
 	cfg     ServiceConfig
 }
 
-func NewService(store *Store, objects ObjectStore, spaces SpaceOwnership, queue *jobs.Enqueuer, log *slog.Logger, cfg ServiceConfig) *Service {
-	return &Service{store: store, objects: objects, spaces: spaces, queue: queue, log: log, cfg: cfg}
+func NewService(store *Store, objects ObjectStore, spaces SpaceOwnership, queue *jobs.Enqueuer, video *transcode.Runner, log *slog.Logger, cfg ServiceConfig) *Service {
+	return &Service{store: store, objects: objects, spaces: spaces, queue: queue, video: video, log: log, cfg: cfg}
 }
 
 type Upload struct {

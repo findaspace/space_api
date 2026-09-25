@@ -31,6 +31,6 @@ func handleReady(pool *pgxpool.Pool, timeout time.Duration) http.HandlerFunc {
 			})
 			return
 		}
-		WriteJSON(w, r, http.StatusOK, map[string]string{"status": "read"})
+		WriteJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
 	}
 }

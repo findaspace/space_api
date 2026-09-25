@@ -19,3 +19,14 @@ COPY --from=build /out/migrate /migrate
 USER nonroot:nonroot
 EXPOSE 8080
 ENTRYPOINT ["/api"]
+
+FROM debian:stable-slim AS worker
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /out/worker /worker
+
+USER nobody
+ENTRYPOINT ["/worker"]

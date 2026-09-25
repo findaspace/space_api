@@ -45,3 +45,10 @@ func (e *Enqueuer) Insert(ctx context.Context, args river.JobArgs) error {
 	}
 	return nil
 }
+
+func (e *Enqueuer) InsertOpts(ctx context.Context, args river.JobArgs, opts *river.InsertOpts) error {
+	if _, err := e.client.Insert(ctx, args, opts); err != nil {
+		return fmt.Errorf("enqueue %s: %w", args.Kind(), err)
+	}
+	return nil
+}

@@ -90,6 +90,13 @@ type Config struct {
 	OSRMTimeout     time.Duration
 	GeoRadiusM      int
 	GeoMaxLandmarks int
+
+	VideoMaxBytes    int64
+	FFmpegPath       string
+	FFprobePath      string
+	TranscodeTimeout time.Duration
+	TranscodeWorkDir string
+	VideoMaxSeconds  int
 }
 
 func (c Config) IsProduction() bool {
@@ -260,6 +267,13 @@ func Load() (Config, error) {
 		OSRMTimeout:     l.duration("SPACE_OSRM_TIMEOUT", 10*time.Second),
 		GeoRadiusM:      l.int("SPACE_GEO_RADIUS_M", 5000),
 		GeoMaxLandmarks: l.int("SPACE_GEO_MAX_LANDMARKS", 12),
+
+		VideoMaxBytes:    l.int64("SPACE_VIDEO_MAX_BYTES", 100<<20),
+		FFmpegPath:       l.str("SPACE_FFMPEG_PATH", "ffmpeg"),
+		FFprobePath:      l.str("SPACE_FFPROBE_PATH", "ffprobe"),
+		TranscodeTimeout: l.duration("SPACE_TRANSCODE_TIMEOUT", 5*time.Minute),
+		TranscodeWorkDir: l.str("SPACE_TRANSCODE_WORKDIR", os.TempDir()),
+		VideoMaxSeconds:  l.int("SPACE_VIDEO_MAX_SECONDS", 60),
 	}
 
 	var problems []string

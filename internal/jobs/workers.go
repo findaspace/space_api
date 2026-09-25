@@ -18,6 +18,8 @@ type SearchIndexer interface {
 
 type MediaProcessor interface {
 	Process(ctx context.Context, spaceID, mediaID uuid.UUID) error
+	ProcessVideo(ctx context.Context, videoID uuid.UUID) error
+	SweepVideos(ctx context.Context, olderThan time.Duration) (int, error)
 }
 
 type HoldExpirer interface {
@@ -220,6 +222,8 @@ func Register(deps Deps) (*river.Workers, error) {
 	river.AddWorker(workers, &RefreshSearchStatsWorker{deps: deps})
 	river.AddWorker(workers, &RouteListingWorker{deps: deps})
 	river.AddWorker(workers, &BackfillRoutesWorker{deps: deps})
+	river.AddWorker(workers, &ProcessVideoWorker{deps: deps})
+	river.AddWorker(workers, &SweepUploadsWorker{deps: deps})
 
 	return workers, nil
 }
@@ -242,6 +246,7 @@ func Periodic() []*river.PeriodicJob {
 		every(6*time.Hour, RevealReviewsArgs{}, false),
 		every(5*time.Minute, RefreshSearchStatsArgs{}, true),
 		every(15*time.Minute, BackfillRoutesArgs{}, true),
+		every(time.Hour, SweepVideosArgs{}, false),
 	}
 }
 
@@ -268,6 +273,38 @@ func (w *BackfillRoutesWorker) Work(ctx context.Context, job *river.Job[Backfill
 	}
 	if n > 0 {
 		w.deps.Log.InfoContext(ctx, "routed listings", slog.Int("count", n))
+	}
+	return nil
+}
+
+type ProcessVideoWorker struct {
+	river.WorkerDefaults[ProcessVideoArgs]
+	deps Deps
+}
+
+func (w *ProcessVideoWorker) Work(ctx context.Context, job *river.Job[ProcessVideoArgs]) error {
+	return w.deps.Media.ProcessVideo(ctx, job.Args.VideoID)
+}
+
+// Transcoding holds a worker slot for minutes, so the default twenty-five
+// attempts would mean a single bad file occupying a slot for hours. Three is
+// enough to survive a restart or a blip in object storage.
+func (w *ProcessVideoWorker) Timeout(job *river.Job[ProcessVideoArgs]) time.Duration {
+	return 10 * time.Minute
+}
+
+type SweepVideosWorker struct {
+	river.WorkerDefaults[SweepVideosArgs]
+	deps Deps
+}
+
+func (w *SweepVideosWorker) Work(ctx context.Context, job *river.Job[SweepVideosArgs]) error {
+	n, err := w.deps.Media.SweepVideos(ctx, 90*time.Minute)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		w.deps.Log.InfoContext(ctx, "removed abandoned walkthroughs", slog.Int("count", n))
 	}
 	return nil
 }

@@ -22,6 +22,7 @@ type Router interface {
 
 type MediaCounter interface {
 	CountReady(ctx context.Context, spaceID uuid.UUID) (int, error)
+	HasVideo(ctx context.Context, spaceID uuid.UUID) (bool, error)
 }
 
 type Service struct {
@@ -228,10 +229,14 @@ func (s *Service) Completeness(ctx context.Context, id, hostID uuid.UUID) (int, 
 	if err != nil {
 		return 0, nil, err
 	}
+	hasVideo, err := s.media.HasVideo(ctx, sp.ID)
+	if err != nil {
+		return 0, nil, err
+	}
 
 	score, gaps := Score(Inputs{
 		Type: sp.Type, Attributes: sp.Attributes,
-		Description: sp.Description, PhotoCount: photos,
+		Description: sp.Description, PhotoCount: photos, HasVideo: hasVideo,
 	})
 	return score, gaps, nil
 }

@@ -63,6 +63,7 @@ func NewRouter(d Deps) http.Handler {
 	bh := bookingHandler{svc: d.Booking}
 	ph := paymentHandler{svc: d.Payment}
 	sh := searchHandler{svc: d.Search}
+	videoH := videoHandler{svc: d.Media, listings: d.Listing}
 
 	authLimit := RateLimit(d.Limits.Auth, IPKey(d.TrustProxy))
 	readLimit := RateLimit(d.Limits.Read, ClientKey(d.TrustProxy))
@@ -194,6 +195,12 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /v1/payouts", authed(writeLimit(http.HandlerFunc(poh.request))))
 
 	mux.Handle("POST /v1/webhooks/paystack", hookLimit(http.HandlerFunc(ph.webhook)))
+
+	mux.Handle("POST /v1/spaces/{id}/video", authed(writeLimit(http.HandlerFunc(videoH.request))))
+	mux.Handle("POST /v1/spaces/{id}/video/confirm", authed(http.HandlerFunc(videoH.confirm)))
+	mux.Handle("GET /v1/spaces/{id}/video", authed(http.HandlerFunc(videoH.own)))
+	mux.Handle("DELETE /v1/spaces/{id}/video", authed(http.HandlerFunc(videoH.remove)))
+	mux.Handle("GET /v1/listings/{slug}/video", readLimit(http.HandlerFunc(videoH.forListing)))
 
 	return Chain(mux,
 		RequestID,

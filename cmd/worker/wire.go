@@ -21,6 +21,7 @@ import (
 	"github.com/samnart1/space_api/internal/platform/osrm"
 	"github.com/samnart1/space_api/internal/platform/paystack"
 	"github.com/samnart1/space_api/internal/platform/sms"
+	"github.com/samnart1/space_api/internal/platform/transcode"
 	"github.com/samnart1/space_api/internal/review"
 	"github.com/samnart1/space_api/internal/search"
 )
@@ -74,8 +75,24 @@ func buildDeps(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *
 		MaxWalkSeconds: 2700,
 	})
 
-	mediaSvc := media.NewService(media.NewStore(pool), objects, workerOnly{}, enqueuer, log,
-		media.ServiceConfig{MaxBytes: cfg.MediaMaxBytes, MaxPerSpace: cfg.MediaMaxPerSpace})
+	transcoder := transcode.New(transcode.Config{
+		FFmpegPath:  cfg.FFmpegPath,
+		FFprobePath: cfg.FFprobePath,
+		Timeout:     cfg.TranscodeTimeout,
+		MaxSeconds:  cfg.VideoMaxSeconds,
+		MaxHeight:   480,
+		CRF:         28,
+		MaxRateK:    900,
+	})
+
+	mediaSvc := media.NewService(media.NewStore(pool), objects, workerOnly{}, enqueuer,
+		transcoder, log, media.ServiceConfig{
+			MaxBytes:      cfg.MediaMaxBytes,
+			MaxPerSpace:   cfg.MediaMaxPerSpace,
+			UploadTTL:     cfg.UploadURLTTL,
+			VideoMaxBytes: cfg.VideoMaxBytes,
+			WorkDir:       cfg.TranscodeWorkDir,
+		})
 
 	payoutSvc := payout.NewService(
 		payout.NewStore(pool),

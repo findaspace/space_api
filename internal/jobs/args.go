@@ -55,3 +55,14 @@ func (RouteListingArgs) Kind() string { return "route_listing" }
 type BackfillRoutesArgs struct{}
 
 func (BackfillRoutesArgs) Kind() string { return "backfill_routes" }
+
+type ProcessVideoArgs struct {
+	VideoID uuid.UUID `json:"video_id"`
+	SpaceID uuid.UUID `json:"space_id"`
+}
+
+func (ProcessVideoArgs) Kind() string { return "process_video" }
+
+type SweepVideosArgs struct{}
+
+func (SweepVideosArgs) Kind() string { return "sweep_videos" }

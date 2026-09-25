@@ -30,6 +30,7 @@ import (
 	"github.com/samnart1/space_api/internal/platform/ratelimit"
 	"github.com/samnart1/space_api/internal/platform/sms"
 	"github.com/samnart1/space_api/internal/platform/telemetry"
+	"github.com/samnart1/space_api/internal/platform/transcode"
 	"github.com/samnart1/space_api/internal/review"
 	"github.com/samnart1/space_api/internal/search"
 	"github.com/samnart1/space_api/internal/transport/httpapi"
@@ -142,10 +143,24 @@ func run() error {
 	mediaStore := media.NewStore(pool)
 	listingSvc := listing.NewService(listing.NewStore(pool), identitySvc, mediaStore, routeQueue{queue: enqueuer})
 
-	mediaSvc := media.NewService(mediaStore, objects, listingSvc, enqueuer, log, media.ServiceConfig{
-		MaxBytes:    cfg.MediaMaxBytes,
-		MaxPerSpace: cfg.MediaMaxPerSpace,
+	transcoder := transcode.New(transcode.Config{
+		FFmpegPath:  cfg.FFmpegPath,
+		FFprobePath: cfg.FFprobePath,
+		Timeout:     cfg.TranscodeTimeout,
+		MaxSeconds:  cfg.VideoMaxSeconds,
+		MaxHeight:   480,
+		CRF:         28,
+		MaxRateK:    900,
 	})
+
+	mediaSvc := media.NewService(media.NewStore(pool), objects, listingSvc, enqueuer,
+		transcoder, log, media.ServiceConfig{
+			MaxBytes:      cfg.MediaMaxBytes,
+			MaxPerSpace:   cfg.MediaMaxPerSpace,
+			UploadTTL:     cfg.UploadURLTTL,
+			VideoMaxBytes: cfg.VideoMaxBytes,
+			WorkDir:       cfg.TranscodeWorkDir,
+		})
 
 	calendarSvc := calendar.NewService(calendar.NewStore(pool), calendar.ServiceConfig{
 		Fees: calendar.FeeConfig{
@@ -210,6 +225,11 @@ func run() error {
 		}
 		os.Exit(0)
 	}
+
+	// if err := transcoder.Available(); err != nil {
+	// jobs.Deps{},
+	// return fmt.Errorf("worker needs ffmpeg: %w", err)
+	// }
 
 	// A disabled limiter is a very high one rather than a nil check at every
 	// call site: one code path, and the switch cannot be half-applied.

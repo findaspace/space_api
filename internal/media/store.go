@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/samnart1/space_api/internal/platform/postgres"
@@ -169,4 +170,9 @@ func (s *Store) Abandoned(ctx context.Context, olderThan time.Duration, limit in
 		out = append(out, toDomain(row))
 	}
 	return out, nil
+}
+
+func isUniqueViolation(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.ConstraintName == constraint
 }
