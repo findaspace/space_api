@@ -35,6 +35,34 @@ type Session struct {
 
 type RateLimitedError struct{ RetryAfter time.Duration }
 
+type UserSummary struct {
+	DisplayName     string
+	CreatedAt       time.Time
+	PhoneVerifiedAt *time.Time
+}
+
+func (s *Store) Summaries(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]UserSummary, error) {
+	out := make(map[uuid.UUID]UserSummary, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, display_name, created_at, phone_verified_at FROM users WHERE id = ANY($1::uuid[])`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("user summaries: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id uuid.UUID
+		var u UserSummary
+		if err := rows.Scan(&id, &u.DisplayName, &u.CreatedAt, &u.PhoneVerifiedAt); err != nil {
+			return nil, fmt.Errorf("scan user summary: %w", err)
+		}
+		out[id] = u
+	}
+	return out, rows.Err()
+}
+
 func (e *RateLimitedError) Error() string        { return "identity: too many requests" }
 func (e *RateLimitedError) Is(target error) bool { return target == ErrTooManyOTP }
 
@@ -163,10 +191,20 @@ func (s *Store) Login(ctx context.Context, challengeID uuid.UUID, phone, userAge
 	return user, sess, nil
 }
 
-// Rotate exchanges a refresh token for a new one. The UPDATE is the claim: its
-// WHERE clause means two concurrent refreshes cannot both win, without a
-// transaction held open across the whole exchange.
-func (s *Store) Rotate(ctx context.Context, oldHash, newHash []byte, userAgent, ip string, refreshTTL, maxAge time.Duration) (User, Session, error) {
+// Rotate exchanges a refresh token for a new one.
+//
+// A token that was already rotated is still honoured for a short grace
+// window, and only replay after that window counts as theft. Without it, two
+// requests that refresh at the same moment look identical to a stolen token
+// being replayed: the second revokes the whole family and signs out a user
+// who did nothing wrong. space_web fires several requests in parallel on
+// every navigation, so for it this is routine, not an edge case. Auth0 makes
+// the same trade and calls it a reuse interval.
+//
+// COALESCE keeps the first rotation time, so using the token repeatedly
+// inside the window cannot keep sliding it forward.
+func (s *Store) Rotate(ctx context.Context, oldHash, newHash []byte, userAgent, ip string,
+	refreshTTL, maxAge, grace time.Duration) (User, Session, error) {
 	var (
 		user User
 		sess Session
@@ -179,12 +217,12 @@ func (s *Store) Rotate(ctx context.Context, oldHash, newHash []byte, userAgent, 
 			familyID uuid.UUID
 		)
 		err := tx.QueryRow(ctx, `
-			UPDATE sessions SET rotated_at = now()
+			UPDATE sessions SET rotated_at = COALESCE(rotated_at, now())
 			WHERE refresh_hash = $1
-			  AND rotated_at IS NULL
 			  AND revoked_at IS NULL
 			  AND expires_at > now()
-			RETURNING id, user_id, family_id`, oldHash).Scan(&oldID, &userID, &familyID)
+			  AND (rotated_at IS NULL OR rotated_at > now() - $2::interval)
+			RETURNING id, user_id, family_id`, oldHash, grace).Scan(&oldID, &userID, &familyID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrSessionInvalid
 		}
@@ -374,4 +412,15 @@ func (s *Store) RetryAfter(ctx context.Context, phone string, window time.Durati
 		return time.Second, nil
 	}
 	return time.Duration(seconds) * time.Second, nil
+}
+
+func (s *Store) SetDisplayName(ctx context.Context, id uuid.UUID, name string) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE users SET display_name = $2 WHERE id = $1`, id, name)
+	if err != nil {
+		return fmt.Errorf("set display name: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrOTPNotFound
+	}
+	return nil
 }

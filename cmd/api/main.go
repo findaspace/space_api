@@ -104,6 +104,7 @@ func run() error {
 			OTPMaxPerIP:    cfg.OTPMaxPerIp,
 			RefreshTTL:     cfg.RefreshTTL,
 			SessionMaxAge:  cfg.SessionMaxAge,
+			RefreshGrace:   cfg.RefreshGrace,
 		})
 	// listingSvc := listing.NewService(listing.NewStore(pool), identitySvc)
 
@@ -174,7 +175,11 @@ func run() error {
 		booking.NewStore(pool),
 		spaceSource{listings: listingSvc},
 		pricer{listings: listingSvc, calendars: calendarSvc},
-		booking.ServiceConfig{HoldTTL: cfg.BookingHoldTTL},
+		booking.ServiceConfig{
+			HoldTTL:    cfg.BookingHoldTTL,
+			RequestTTL: cfg.BookingRequestTTL,
+			PaymentTTL: cfg.BookingPaymentTTL,
+		},
 	)
 
 	paystackClient := paystack.New(cfg.PaystackSecret, cfg.PaystackBaseURL, cfg.PaystackTimeout)
@@ -284,6 +289,7 @@ func run() error {
 		RequestTimeout: cfg.RequestTimeout,
 		Metrics:        met,
 		Geo:            geoSvc,
+		BFFSecret:      cfg.BFFSecret,
 	})
 
 	log.Info("paystack configured",

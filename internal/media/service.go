@@ -160,12 +160,22 @@ func (s *Service) Process(ctx context.Context, spaceID, mediaID uuid.UUID) error
 		return nil
 	}
 
-	if err := s.objects.Put(ctx, m.ObjectKey, norm.ContentType, norm.Data,
-		"public, max-age=31536000, immutable"); err != nil {
+	const immutable = "public, max-age=31536000, immutable"
+
+	if err := s.objects.Put(ctx, m.ObjectKey, norm.ContentType, norm.Data, immutable); err != nil {
 		return err
 	}
 
-	_, err = s.store.MarkReady(ctx, mediaID, spaceID, m.ObjectKey, norm.ContentType,
+	// The card is uploaded before the row points at it, so card_key never
+	// names an object that is not there yet. If this fails the job retries and
+	// the row stays pending, which is correct: a half-processed photo is not
+	// ready.
+	cardKey := CardKey(m.ObjectKey)
+	if err := s.objects.Put(ctx, cardKey, ContentJPEG, norm.Card, immutable); err != nil {
+		return err
+	}
+
+	_, err = s.store.MarkReady(ctx, mediaID, spaceID, m.ObjectKey, cardKey, norm.ContentType,
 		int64(len(norm.Data)), norm.Width, norm.Height)
 	return err
 }
@@ -198,6 +208,11 @@ func (s *Service) ForSpace(ctx context.Context, spaceID uuid.UUID) ([]Media, err
 	}
 	for i := range items {
 		items[i].URL = s.objects.PublicURL(items[i].ObjectKey)
+		// Photos from before renditions existed have no card. They simply omit
+		// card_url, and clients fall back to the full image.
+		if items[i].CardKey != "" {
+			items[i].CardURL = s.objects.PublicURL(items[i].CardKey)
+		}
 	}
 	return items, nil
 }
@@ -213,7 +228,10 @@ func (s *Service) Delete(ctx context.Context, spaceID, mediaID, hostID uuid.UUID
 	}
 	// The row is authoritative. A failed object delete leaves a harmless orphan
 	// for the sweeper; a failed row delete would leave a photo nobody can remove.
+	// The card key is derived rather than stored for this, and deleting one that
+	// was never written is a no-op in S3.
 	_ = s.objects.Delete(ctx, key)
+	_ = s.objects.Delete(ctx, CardKey(key))
 	return nil
 }
 

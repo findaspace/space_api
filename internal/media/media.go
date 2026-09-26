@@ -26,6 +26,8 @@ type Media struct {
 	Status      Status
 	URL         string
 	CreatedAt   time.Time
+	CardKey     string
+	CardURL     string
 }
 
 var (

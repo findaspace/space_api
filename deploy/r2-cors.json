@@ -1,0 +1,18 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": [
+          "https://findaspace.site",
+          "https://www.findaspace.site",
+          "https://space-web-git-main-YOURTEAM.vercel.app",
+          "http://localhost:3000"
+        ],
+        "methods": ["PUT", "GET", "HEAD"],
+        "headers": ["content-type", "range", "if-match"]
+      },
+      "exposeHeaders": ["ETag"],
+      "maxAgeSeconds": 3600
+    }
+  ]
+}

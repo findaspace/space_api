@@ -36,6 +36,10 @@ func NewService(store *Store, roles RoleGranter, media MediaCounter, routes Rout
 	return &Service{store: store, roles: roles, media: media, routes: routes}
 }
 
+func (s *Service) Summaries(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Summary, error) {
+	return s.store.Summaries(ctx, ids)
+}
+
 // AssertHostOwns satisfies media.SpaceOwnership.
 func (s *Service) AssertHostOwns(ctx context.Context, spaceID, hostID uuid.UUID) error {
 	_, err := s.store.GetForHost(ctx, spaceID, hostID)

@@ -47,6 +47,7 @@ type Deps struct {
 	RequestTimeout time.Duration
 	Metrics        *metrics.Metrics
 	Geo            *geo.Service
+	BFFSecret      string
 }
 
 type Limiters struct {
@@ -60,10 +61,12 @@ func NewRouter(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	auth := authHandler{svc: d.Identity, trustProxy: d.TrustProxy}
 	ch := calendarHandler{svc: d.Calendar, listings: d.Listing}
-	bh := bookingHandler{svc: d.Booking}
+	// bh := bookingHandler{svc: d.Booking}
 	ph := paymentHandler{svc: d.Payment}
 	sh := searchHandler{svc: d.Search}
 	videoH := videoHandler{svc: d.Media, listings: d.Listing}
+	bh := bookingHandler{svc: d.Booking, listings: d.Listing, users: d.Identity}
+	msgH := messagingHandler{svc: d.Messaging, listings: d.Listing, users: d.Identity}
 
 	authLimit := RateLimit(d.Limits.Auth, IPKey(d.TrustProxy))
 	readLimit := RateLimit(d.Limits.Read, ClientKey(d.TrustProxy))
@@ -95,7 +98,7 @@ func NewRouter(d Deps) http.Handler {
 
 	mediaH := mediaHandler{svc: d.Media, listings: d.Listing}
 
-	msgH := messagingHandler{svc: d.Messaging}
+	// msgH := messagingHandler{svc: d.Messaging}
 	rh := reviewHandler{svc: d.Review, listings: d.Listing}
 
 	mux.Handle("GET /v1/listings/{slug}/walks", readLimit(http.HandlerFunc(geoH.forListing)))
@@ -142,7 +145,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("PUT /v1/payouts/account", hostOnly(poh.saveAccount))
 	mux.Handle("GET /v1/payouts/balance", hostOnly(poh.balance))
 	mux.Handle("GET /v1/payouts", hostOnly(poh.list))
-	// mux.Handle("POST /v1/payouts", hostOnly(poh.request))
+	mux.Handle("GET /v1/payouts/account", hostOnly(poh.getAccount))
 
 	mux.Handle("GET /healthz", handleLive(d.Version, d.Commit))
 	mux.Handle("GET /readyz", handleReady(d.Pool, d.PingTimeout))
@@ -204,10 +207,10 @@ func NewRouter(d Deps) http.Handler {
 
 	return Chain(mux,
 		RequestID,
+		TrustBFF(d.BFFSecret),
 		CORS(d.CORSOrigins),
 		SecurityHeaders,
 		Logger(d.Logger),
-		// Metrics(d.Metrics),
 		Recover,
 		Timeout(d.RequestTimeout),
 		MaxBytes(d.MaxBodyBytes),

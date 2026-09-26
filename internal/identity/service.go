@@ -19,6 +19,7 @@ type ServiceConfig struct {
 	OTPMaxPerIP    int
 	RefreshTTL     time.Duration
 	SessionMaxAge  time.Duration
+	RefreshGrace   time.Duration
 }
 
 type Service struct {
@@ -31,11 +32,28 @@ type Service struct {
 	now    func() time.Time
 }
 
+func (s *Service) Summaries(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]UserSummary, error) {
+	return s.store.Summaries(ctx, ids)
+}
+
 func NewService(store *Store, hasher *Hasher, tokens *TokenIssuer, sender sms.Sender, log *slog.Logger, cfg ServiceConfig) *Service {
 	return &Service{
 		store: store, hasher: hasher, tokens: tokens,
 		sender: sender, log: log, cfg: cfg, now: time.Now,
 	}
+}
+
+// SetDisplayName returns the user exactly as Me does, roles included, so the
+// response to PATCH /v1/me matches GET /v1/me.
+func (s *Service) SetDisplayName(ctx context.Context, userID uuid.UUID, raw string) (User, error) {
+	name, err := NormalizeDisplayName(raw)
+	if err != nil {
+		return User{}, err
+	}
+	if err := s.store.SetDisplayName(ctx, userID, name); err != nil {
+		return User{}, err
+	}
+	return s.store.UserByID(ctx, userID)
 }
 
 type OTPResult struct {
@@ -136,9 +154,11 @@ func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent, ip strin
 		return TokenPair{}, err
 	}
 
-	user, sess, err := s.store.Rotate(ctx, oldHash, newHash, userAgent, ip, s.cfg.RefreshTTL, s.cfg.SessionMaxAge)
+	user, sess, err := s.store.Rotate(ctx, oldHash, newHash, userAgent, ip,
+		s.cfg.RefreshTTL, s.cfg.SessionMaxAge, s.cfg.RefreshGrace)
 	if errors.Is(err, ErrSessionInvalid) {
-		// Could be unknown, expired, or replayed. Only the last one is an alarm.
+		// Unknown, expired, or replayed after the grace window. Only the last
+		// is an alarm.
 		if diag := s.store.DiagnoseRefresh(ctx, oldHash); errors.Is(diag, ErrSessionReuse) {
 			s.log.WarnContext(ctx, "refresh token reuse detected, session family revoked",
 				slog.String("ip", ip))

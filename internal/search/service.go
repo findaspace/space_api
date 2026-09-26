@@ -2,6 +2,8 @@ package search
 
 import (
 	"context"
+
+	"github.com/samnart1/space_api/internal/geo"
 )
 
 type URLSigner interface {
@@ -29,6 +31,14 @@ func (s *Service) Search(ctx context.Context, q Query) (Page, error) {
 	if err != nil {
 		return Page{}, err
 	}
+
+	// Search results are public, so they get the same approximate point as a
+	// public listing. Distances were already computed from the exact point in
+	// SQL; only what leaves the server is coarsened.
+	for i := range results {
+		results[i].Latitude, results[i].Longitude = geo.Approximate(results[i].Latitude, results[i].Longitude)
+	}
+
 	q.Limit--
 
 	page := Page{Results: results}

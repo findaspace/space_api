@@ -96,7 +96,8 @@ func (s *Service) Intent(ctx context.Context, bookingID, guestID uuid.UUID) (Pay
 		AmountMinor: snap.DueNowMinor,
 		Currency:    snap.Currency,
 		Reference:   ref,
-		CallbackURL: s.cfg.CallbackURL,
+		// CallbackURL: s.cfg.CallbackURL,
+		CallbackURL: strings.ReplaceAll(s.cfg.CallbackURL, "{booking_id}", snap.ID.String()),
 		Channels:    s.cfg.Channels,
 		Metadata: map[string]any{
 			"booking_id":        snap.ID.String(),

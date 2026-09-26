@@ -53,8 +53,6 @@ type Config struct {
 	MediaMaxBytes        int64
 	MediaMaxPerSpace     int
 
-	// PlatformFeeBps int
-
 	BookingHoldTTL time.Duration
 
 	PaystackSecret      string
@@ -97,6 +95,12 @@ type Config struct {
 	TranscodeTimeout time.Duration
 	TranscodeWorkDir string
 	VideoMaxSeconds  int
+
+	RefreshGrace time.Duration
+	BFFSecret    string
+
+	BookingRequestTTL time.Duration
+	BookingPaymentTTL time.Duration
 }
 
 func (c Config) IsProduction() bool {
@@ -274,6 +278,12 @@ func Load() (Config, error) {
 		TranscodeTimeout: l.duration("SPACE_TRANSCODE_TIMEOUT", 5*time.Minute),
 		TranscodeWorkDir: l.str("SPACE_TRANSCODE_WORKDIR", os.TempDir()),
 		VideoMaxSeconds:  l.int("SPACE_VIDEO_MAX_SECONDS", 60),
+
+		RefreshGrace: l.duration("SPACE_REFRESH_GRACE", 30*time.Second),
+		BFFSecret:    l.str("SPACE_BFF_SECRET", ""),
+
+		BookingRequestTTL: l.duration("SPACE_BOOKING_REQUEST_TTL", 48*time.Hour),
+		BookingPaymentTTL: l.duration("SPACE_BOOKING_PAYMENT_TTL", 24*time.Hour),
 	}
 
 	var problems []string
@@ -312,6 +322,15 @@ func Load() (Config, error) {
 	}
 	if cfg.IsProduction() && len(cfg.CORSOrigins) == 0 {
 		problems = append(problems, "SPACE_CORS_ORIGINS must list the web origins in production")
+	}
+	if cfg.IsProduction() && len(cfg.BFFSecret) < 32 {
+		problems = append(problems, "SPACE_BFF_SECRET must be at least 32 characters in production")
+	}
+	if cfg.RefreshGrace > 2*time.Minute {
+		problems = append(problems, "SPACE_REFRESH_GRACE above two minutes weakens theft detection on refresh tokens")
+	}
+	if cfg.BookingPaymentTTL < time.Hour || cfg.BookingRequestTTL < time.Hour {
+		problems = append(problems, "SPACE_BOOKING_REQUEST_TTL and SPACE_BOOKING_PAYMENT_TTL must be at least an hour")
 	}
 
 	return cfg, nil

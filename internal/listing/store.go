@@ -24,6 +24,34 @@ func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool, q: dbgen.New(pool)}
 }
 
+type Summary struct {
+	Slug           string
+	Title          string
+	Latitude       float64
+	Longitude      float64
+	Locality       string
+	Landmark       string
+	DigitalAddress string
+}
+
+func (s *Store) Summaries(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Summary, error) {
+	out := make(map[uuid.UUID]Summary, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := s.q.SpaceSummaries(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("space summaries: %w", err)
+	}
+	for _, r := range rows {
+		out[r.ID] = Summary{
+			Slug: r.Slug, Title: r.Title, Latitude: r.Latitude, Longitude: r.Longitude,
+			Locality: r.Locality, Landmark: r.Landmark, DigitalAddress: r.DigitalAddress,
+		}
+	}
+	return out, nil
+}
+
 // toDomain converts the generated row into the type the rest of the codebase
 // uses. Keeping dbgen out of the service layer means a schema change is a
 // compile error here and nowhere else.

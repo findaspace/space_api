@@ -121,7 +121,7 @@ func (s *Store) Hold(ctx context.Context, in HoldInput) (Booking, error) {
 		// here makes expiry exact at the only moment it matters.
 		if _, err := tx.Exec(ctx, `
 			UPDATE bookings SET status = 'expired'
-			WHERE space_id = $1 AND status = 'held' AND hold_expires_at <= now()`,
+			WHERE space_id = $1 AND status IN ('held', 'approved') AND hold_expires_at <= now()`,
 			in.SpaceID); err != nil {
 			return fmt.Errorf("expire stale holds: %w", err)
 		}
@@ -213,17 +213,16 @@ func (s *Store) ByIDForParty(ctx context.Context, id, userID uuid.UUID) (Booking
 }
 
 type TransitionInput struct {
-	ID     uuid.UUID
-	From   Status
-	To     Status
-	Actor  Actor
-	Reason string
-	Refund int64
-	At     time.Time
+	ID        uuid.UUID
+	From      Status
+	To        Status
+	Actor     Actor
+	Reason    string
+	Refund    int64
+	At        time.Time
+	PayWithin time.Duration
 }
 
-// Transition applies a status change only if the row is still in the status the
-// caller validated against. Zero rows means somebody moved it first.
 func (s *Store) Transition(ctx context.Context, in TransitionInput) (Booking, error) {
 	b, err := scan(s.pool.QueryRow(ctx, `
 		UPDATE bookings SET
@@ -234,10 +233,17 @@ func (s *Store) Transition(ctx context.Context, in TransitionInput) (Booking, er
 			cancelled_by = CASE WHEN $3::booking_status IN ('cancelled','declined') THEN $4::actor_kind ELSE cancelled_by END,
 			cancel_reason = CASE WHEN $3::booking_status IN ('cancelled','declined') THEN $5 ELSE cancel_reason END,
 			refund_minor = CASE WHEN $3::booking_status IN ('cancelled','declined') THEN $6 ELSE refund_minor END,
-			hold_expires_at = CASE WHEN $3::booking_status = 'held' THEN hold_expires_at ELSE NULL END
+			-- Approval starts the payment window instead of clearing the
+			-- deadline. An approved booking still holds the dates, so without
+			-- one it could hold them forever, unpaid.
+			hold_expires_at = CASE
+				WHEN $3::booking_status = 'held'     THEN hold_expires_at
+				WHEN $3::booking_status = 'approved' THEN now() + $7::interval
+				ELSE NULL
+			END
 		WHERE id = $1 AND status = $2::booking_status
 		RETURNING `+bookingColumns,
-		in.ID, string(in.From), string(in.To), string(in.Actor), in.Reason, in.Refund))
+		in.ID, string(in.From), string(in.To), string(in.Actor), in.Reason, in.Refund, in.PayWithin))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Booking{}, ErrConflict
 	}
@@ -249,15 +255,15 @@ func (s *Store) Transition(ctx context.Context, in TransitionInput) (Booking, er
 
 // ExpireHolds is what the Phase 8 worker will call on a schedule. Hold() covers
 // correctness already; this keeps stale rows from lingering in host calendars.
-func (s *Store) ExpireHolds(ctx context.Context) (int64, error) {
-	tag, err := s.pool.Exec(ctx,
-		`UPDATE bookings SET status = 'expired'
-		 WHERE status = 'held' AND hold_expires_at <= now()`)
-	if err != nil {
-		return 0, fmt.Errorf("expire holds: %w", err)
-	}
-	return tag.RowsAffected(), nil
-}
+// func (s *Store) ExpireHolds(ctx context.Context) (int64, error) {
+// 	tag, err := s.pool.Exec(ctx,
+// 		`UPDATE bookings SET status = 'expired'
+// 		 WHERE status = 'held' AND hold_expires_at <= now()`)
+// 	if err != nil {
+// 		return 0, fmt.Errorf("expire holds: %w", err)
+// 	}
+// 	return tag.RowsAffected(), nil
+// }
 
 func (s *Store) ListForGuest(ctx context.Context, guestID uuid.UUID, limit, offset int32) ([]Booking, error) {
 	return s.list(ctx, `WHERE guest_id = $1`, guestID, limit, offset)

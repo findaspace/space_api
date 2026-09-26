@@ -31,13 +31,24 @@ type Normalized struct {
 	ContentType string
 	Width       int
 	Height      int
+
+	// Card is the small rendition search results load. Always a JPEG.
+	Card       []byte
+	CardWidth  int
+	CardHeight int
 }
 
-// Normalize decodes, downscales and re-encodes an image.
+// Normalize decodes, downscales and re-encodes an image, and derives the card
+// rendition from the same decode.
 //
 // The re-encode is the security control: Go's decoders keep no metadata, so
 // EXIF cannot survive the round trip, and the GPS tags a phone writes into a
-// listing photo never reach the internet.
+// listing photo never reach the internet. The card goes through the same
+// re-encode, so it is equally clean.
+//
+// Decoding is the expensive step, so it happens once. The card is scaled from
+// the already-downscaled image rather than the original, which is faster and
+// looks identical at that size.
 func Normalize(r io.Reader, declaredType string, limit int64) (Normalized, error) {
 	if declaredType != ContentJPEG && declaredType != ContentPNG {
 		return Normalized{}, ErrUnsupportedType
@@ -72,19 +83,24 @@ func Normalize(r io.Reader, declaredType string, limit int64) (Normalized, error
 		return Normalized{}, ErrCorruptImage
 	}
 
-	dst := downscale(src, MaxEdge)
-	bounds := dst.Bounds()
+	full := downscale(src, MaxEdge)
+	bounds := full.Bounds()
 
 	var buf bytes.Buffer
 	switch declaredType {
 	case ContentJPEG:
-		err = jpeg.Encode(&buf, dst, &jpeg.Options{Quality: jpegQuality})
+		err = jpeg.Encode(&buf, full, &jpeg.Options{Quality: jpegQuality})
 	case ContentPNG:
 		enc := png.Encoder{CompressionLevel: png.BestCompression}
-		err = enc.Encode(&buf, dst)
+		err = enc.Encode(&buf, full)
 	}
 	if err != nil {
 		return Normalized{}, fmt.Errorf("encode image: %w", err)
+	}
+
+	card, cw, ch, err := encodeCard(full)
+	if err != nil {
+		return Normalized{}, err
 	}
 
 	return Normalized{
@@ -92,9 +108,11 @@ func Normalize(r io.Reader, declaredType string, limit int64) (Normalized, error
 		ContentType: declaredType,
 		Width:       bounds.Dx(),
 		Height:      bounds.Dy(),
+		Card:        card,
+		CardWidth:   cw,
+		CardHeight:  ch,
 	}, nil
 }
-
 func downscale(src image.Image, maxEdge int) image.Image {
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()

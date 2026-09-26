@@ -2,6 +2,7 @@ package booking
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -52,7 +53,12 @@ type Pricer interface {
 }
 
 type ServiceConfig struct {
+	// HoldTTL is how long a nightly guest's dates are held while they pay.
 	HoldTTL time.Duration
+	// RequestTTL is how long a host has to answer a lease request.
+	RequestTTL time.Duration
+	// PaymentTTL is how long an approved lease guest has to pay.
+	PaymentTTL time.Duration
 }
 
 type Service struct {
@@ -117,8 +123,15 @@ func (s *Service) Hold(ctx context.Context, req HoldRequest) (Booking, error) {
 		Policy:        priced.Policy,
 
 		IdempotencyKey: req.IdempotencyKey,
-		HoldFor:        s.cfg.HoldTTL,
+		HoldFor:        s.holdFor(sp.Mode),
 	})
+}
+
+func (s *Service) holdFor(mode Mode) time.Duration {
+	if mode == ModeTerm {
+		return s.cfg.RequestTTL
+	}
+	return s.cfg.HoldTTL
 }
 
 func (s *Service) Get(ctx context.Context, id, userID uuid.UUID) (Booking, error) {
@@ -229,7 +242,19 @@ func (s *Service) hostDecision(ctx context.Context, id, hostID uuid.UUID, to Sta
 
 	return s.store.Transition(ctx, TransitionInput{
 		ID: b.ID, From: b.Status, To: to, Actor: ActorHost, Reason: reason,
+		// Only used when approving: the guest's deadline to pay.
+		PayWithin: s.cfg.PaymentTTL,
 	})
+}
+
+func (s *Store) ExpireHolds(ctx context.Context) (int64, error) {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE bookings SET status = 'expired'
+		 WHERE status IN ('held', 'approved') AND hold_expires_at <= now()`)
+	if err != nil {
+		return 0, fmt.Errorf("expire holds: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 func (s *Service) ByID(ctx context.Context, id uuid.UUID) (Booking, error) {

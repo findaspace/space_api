@@ -20,6 +20,10 @@ func NewService(store *Store, spaces SpaceLookup) *Service {
 	return &Service{store: store, spaces: spaces}
 }
 
+func (s *Service) LastMessages(ctx context.Context, threadIDs []uuid.UUID) (map[uuid.UUID]string, error) {
+	return s.store.LastMessages(ctx, threadIDs)
+}
+
 // Send posts a message as a guest opening or continuing a conversation about a
 // space. Hosts reply through Reply, which needs an existing thread.
 func (s *Service) Send(ctx context.Context, spaceID, guestID uuid.UUID, body string) (Thread, Message, error) {

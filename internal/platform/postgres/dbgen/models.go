@@ -235,6 +235,52 @@ func (ns NullEntryDirection) Value() (driver.Value, error) {
 	return string(ns.EntryDirection), nil
 }
 
+type LandmarkKind string
+
+const (
+	LandmarkKindCampusGate   LandmarkKind = "campus_gate"
+	LandmarkKindMarket       LandmarkKind = "market"
+	LandmarkKindTransportHub LandmarkKind = "transport_hub"
+	LandmarkKindMall         LandmarkKind = "mall"
+	LandmarkKindJunction     LandmarkKind = "junction"
+	LandmarkKindHospital     LandmarkKind = "hospital"
+)
+
+func (e *LandmarkKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LandmarkKind(s)
+	case string:
+		*e = LandmarkKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LandmarkKind: %T", src)
+	}
+	return nil
+}
+
+type NullLandmarkKind struct {
+	LandmarkKind LandmarkKind
+	Valid        bool // Valid is true if LandmarkKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLandmarkKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.LandmarkKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LandmarkKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLandmarkKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LandmarkKind), nil
+}
+
 type LedgerAccount string
 
 const (
@@ -898,6 +944,50 @@ func (ns NullUserStatus) Value() (driver.Value, error) {
 	return string(ns.UserStatus), nil
 }
 
+type VideoStatus string
+
+const (
+	VideoStatusPending    VideoStatus = "pending"
+	VideoStatusProcessing VideoStatus = "processing"
+	VideoStatusReady      VideoStatus = "ready"
+	VideoStatusFailed     VideoStatus = "failed"
+)
+
+func (e *VideoStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = VideoStatus(s)
+	case string:
+		*e = VideoStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for VideoStatus: %T", src)
+	}
+	return nil
+}
+
+type NullVideoStatus struct {
+	VideoStatus VideoStatus
+	Valid       bool // Valid is true if VideoStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullVideoStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.VideoStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.VideoStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullVideoStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.VideoStatus), nil
+}
+
 type AvailabilityBlock struct {
 	ID        uuid.UUID
 	SpaceID   uuid.UUID
@@ -938,6 +1028,18 @@ type Booking struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	CancellationPolicy CancellationPolicy
+}
+
+type Landmark struct {
+	ID        uuid.UUID
+	Name      string
+	Kind      LandmarkKind
+	Locality  string
+	Region    string
+	Latitude  float64
+	Longitude float64
+	Active    bool
+	CreatedAt time.Time
 }
 
 type LedgerEntry struct {
@@ -1138,6 +1240,18 @@ type Space struct {
 	PublishedAt    pgtype.Timestamptz
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	ReviewCount    int32
+	RatingSum      int32
+	PhotoCount     int32
+	Completeness   int16
+}
+
+type SpaceLandmark struct {
+	SpaceID     uuid.UUID
+	LandmarkID  uuid.UUID
+	WalkSeconds int32
+	WalkMetres  int32
+	ComputedAt  time.Time
 }
 
 type SpaceMedium struct {
@@ -1154,6 +1268,24 @@ type SpaceMedium struct {
 	ReadyAt       pgtype.Timestamptz
 	FailureReason string
 	Attempts      int16
+	CardKey       string
+}
+
+type SpaceVideo struct {
+	ID              uuid.UUID
+	SpaceID         uuid.UUID
+	Status          VideoStatus
+	UploadKey       string
+	VideoKey        string
+	PosterKey       string
+	DurationSeconds int16
+	Width           int32
+	Height          int32
+	Bytes           int64
+	FailureReason   string
+	Attempts        int16
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type StayRule struct {

@@ -11,6 +11,37 @@ import (
 
 type payoutHandler struct{ svc *payout.Service }
 
+func accountJSON(a payout.Account) map[string]any {
+	return map[string]any{
+		"id":             a.ID.String(),
+		"channel":        a.Channel,
+		"bank_code":      a.BankCode,
+		"account_number": a.AccountNumber,
+		"account_name":   a.AccountName,
+		"verified":       a.VerifiedAt != nil,
+	}
+}
+
+func (h payoutHandler) getAccount(w http.ResponseWriter, r *http.Request) {
+	p, ok := PrincipalFrom(r.Context())
+	if !ok {
+		unauthorized(w, r, "missing bearer token")
+		return
+	}
+	account, err := h.svc.Account(r.Context(), p.UserID)
+	if errors.Is(err, payout.ErrNoAccount) {
+		// Not an error here: "no account yet" is the answer, and it means
+		// "ask for one". 404, not the 409 a withdrawal would get.
+		WriteProblem(w, r, Problem{Status: http.StatusNotFound, Title: "no payout account"})
+		return
+	}
+	if err != nil {
+		writePayoutError(w, r, err)
+		return
+	}
+	WriteJSON(w, r, http.StatusOK, accountJSON(account))
+}
+
 func (h payoutHandler) saveAccount(w http.ResponseWriter, r *http.Request) {
 	p, ok := PrincipalFrom(r.Context())
 	if !ok {
@@ -42,14 +73,7 @@ func (h payoutHandler) saveAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteJSON(w, r, http.StatusOK, map[string]any{
-		"id":             account.ID.String(),
-		"channel":        account.Channel,
-		"bank_code":      account.BankCode,
-		"account_number": account.AccountNumber,
-		"account_name":   account.AccountName,
-		"verified":       account.VerifiedAt != nil,
-	})
+	WriteJSON(w, r, http.StatusOK, accountJSON(account))
 }
 
 func (h payoutHandler) balance(w http.ResponseWriter, r *http.Request) {

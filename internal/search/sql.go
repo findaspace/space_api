@@ -99,7 +99,8 @@ func build(q Query) (string, []any) {
 			%s AS score
 		FROM spaces s
 		LEFT JOIN LATERAL (
-			SELECT object_key FROM space_media
+			SELECT COALESCE(NULLIF(card_key, ''), object_key) AS object_key
+			FROM space_media
 			WHERE space_id = s.id AND status = 'ready'
 			ORDER BY position, created_at
 			LIMIT 1

@@ -36,6 +36,7 @@ func toDomain(row dbgen.SpaceMedium) Media {
 		Position:    int(row.Position),
 		Status:      Status(row.Status),
 		CreatedAt:   row.CreatedAt,
+		CardKey:     row.CardKey,
 	}
 }
 
@@ -64,11 +65,13 @@ func (s *Store) Get(ctx context.Context, id, spaceID uuid.UUID) (Media, error) {
 	return toDomain(row), nil
 }
 
-func (s *Store) MarkReady(ctx context.Context, id, spaceID uuid.UUID, key, contentType string, size int64, w, h int) (Media, error) {
+func (s *Store) MarkReady(ctx context.Context, id, spaceID uuid.UUID, key, cardKey, contentType string,
+	size int64, w, h int) (Media, error) {
 	row, err := s.q.MarkMediaReady(ctx, dbgen.MarkMediaReadyParams{
 		ID:          id,
 		SpaceID:     spaceID,
 		ObjectKey:   key,
+		CardKey:     cardKey,
 		ContentType: contentType,
 		ByteSize:    size,
 		Width:       int32(w),

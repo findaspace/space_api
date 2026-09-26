@@ -12,7 +12,8 @@ WHERE space_id = @space_id AND status <> 'failed';
 -- name: MarkMediaReady :one
 UPDATE space_media
 SET status = 'ready', byte_size = @byte_size, width = @width, height = @height,
-    object_key = @object_key, content_type = @content_type, ready_at = now()
+    object_key = @object_key, card_key = @card_key, content_type = @content_type,
+    ready_at = now()
 WHERE id = @id AND space_id = @space_id
 RETURNING *;
 

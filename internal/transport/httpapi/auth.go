@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"strings"
 
@@ -107,23 +106,4 @@ func unauthorized(w http.ResponseWriter, r *http.Request, detail string) {
 		Title:  "authentication required",
 		Detail: detail,
 	})
-}
-
-// ClientIP returns the caller's address. X-Forwarded-For is only consulted
-// when the deployment is actually behind a proxy, because any client can send
-// that header and otherwise every rate limit becomes trivially bypassable.
-func ClientIP(r *http.Request, trustProxy bool) string {
-	if trustProxy {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			if first, _, ok := strings.Cut(xff, ","); ok {
-				return strings.TrimSpace(first)
-			}
-			return strings.TrimSpace(xff)
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

@@ -36,6 +36,7 @@ type Querier interface {
 	NextMediaPosition(ctx context.Context, spaceID uuid.UUID) (int32, error)
 	SetMediaPosition(ctx context.Context, arg SetMediaPositionParams) error
 	SetSpaceStatus(ctx context.Context, arg SetSpaceStatusParams) (Space, error)
+	SpaceSummaries(ctx context.Context, ids []uuid.UUID) ([]SpaceSummariesRow, error)
 	UpdateSpace(ctx context.Context, arg UpdateSpaceParams) (Space, error)
 	UpsertStayRules(ctx context.Context, arg UpsertStayRulesParams) (StayRule, error)
 }

@@ -187,7 +187,9 @@ func (h listingHandler) getPublic(w http.ResponseWriter, r *http.Request) {
 		writeListingError(w, r, err)
 		return
 	}
-	WriteJSON(w, r, http.StatusOK, toSpaceResponse(sp))
+	// The public shape, never toSpaceResponse: that is the host's view and
+	// carries the exact address and the host's id.
+	WriteJSON(w, r, http.StatusOK, toPublicSpaceResponse(sp))
 }
 
 func (h listingHandler) patch(w http.ResponseWriter, r *http.Request) {

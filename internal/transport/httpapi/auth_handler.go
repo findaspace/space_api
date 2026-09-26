@@ -129,6 +129,26 @@ func (h authHandler) logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h authHandler) patchMe(w http.ResponseWriter, r *http.Request) {
+	p, ok := PrincipalFrom(r.Context())
+	if !ok {
+		unauthorized(w, r, "missing bearer token")
+		return
+	}
+	var body struct {
+		DisplayName string `json:"display_name"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	user, err := h.svc.SetDisplayName(r.Context(), p.UserID, body.DisplayName)
+	if err != nil {
+		writeIdentityError(w, r, err)
+		return
+	}
+	WriteJSON(w, r, http.StatusOK, toUserResponse(user))
+}
+
 func (h authHandler) me(w http.ResponseWriter, r *http.Request) {
 	p, ok := PrincipalFrom(r.Context())
 	if !ok {
@@ -222,6 +242,15 @@ func writeIdentityError(w http.ResponseWriter, r *http.Request, err error) {
 		p = Problem{Status: http.StatusTooManyRequests, Title: "too many requests",
 			Detail: "wait before requesting another code"}
 
+	case errors.Is(err, identity.ErrNameLength),
+		errors.Is(err, identity.ErrNameLetters),
+		errors.Is(err, identity.ErrNameContact):
+		detail := "use your name only; phone numbers, emails and links are not allowed"
+		if errors.Is(err, identity.ErrNameLength) {
+			detail = "between 2 and 60 characters"
+		}
+		WriteProblem(w, r, Problem{Status: http.StatusUnprocessableEntity, Title: "invalid name",
+			Errors: []FieldError{{Field: "display_name", Code: "invalid", Detail: detail}}})
 	default:
 		// Unmapped means a bug or an infrastructure failure. The client gets
 		// nothing useful; the log gets everything.

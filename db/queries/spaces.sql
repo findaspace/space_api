@@ -29,6 +29,11 @@ WHERE host_id = @host_id
 ORDER BY created_at DESC
 LIMIT @page_limit OFFSET @page_offset;
 
+
+-- name: SpaceSummaries :many
+SELECT id, slug, title, latitude, longitude, locality, landmark, digital_address
+FROM spaces WHERE id = ANY(@ids::uuid[]);
+
 -- name: UpdateSpace :one
 UPDATE spaces SET
     title            = COALESCE(sqlc.narg('title'), title),

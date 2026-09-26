@@ -9,7 +9,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: help up stop down build run worker migrate test itest test-integration lint tidy generate secrets loadtest
+.PHONY: help up stop down build run worker migrate test itest test-integration lint tidy generate secrets loadtest stub
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "%-10s %s\n", $$1, $$2}'
@@ -58,3 +58,6 @@ worker:
 
 loadtest:
 	k6 run -e API=$(API) -e TOKEN=$(TOKEN) -e SPACE=$(SPACE) loadtest/booking.js
+
+stub: ## Local Paystack stand-in on :9099, sharing the API's secret
+	SPACE_PAYSTACK_SECRET=$$(grep '^SPACE_PAYSTACK_SECRET=' .env | cut -d= -f2-) go run ./cmd/paystackstub

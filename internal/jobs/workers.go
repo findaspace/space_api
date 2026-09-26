@@ -223,7 +223,7 @@ func Register(deps Deps) (*river.Workers, error) {
 	river.AddWorker(workers, &RouteListingWorker{deps: deps})
 	river.AddWorker(workers, &BackfillRoutesWorker{deps: deps})
 	river.AddWorker(workers, &ProcessVideoWorker{deps: deps})
-	river.AddWorker(workers, &SweepUploadsWorker{deps: deps})
+	// river.AddWorker(workers, &SweepUploadsWorker{deps: deps})
 
 	return workers, nil
 }

@@ -26,13 +26,14 @@ type mediaResponse struct {
 	ByteSize    int64  `json:"byte_size"`
 	Position    int    `json:"position"`
 	Status      string `json:"status"`
+	CardURL     string `json:"card_url,omitempty"`
 }
 
 func toMediaResponse(m media.Media) mediaResponse {
 	return mediaResponse{
 		ID: m.ID.String(), URL: m.URL, ContentType: m.ContentType,
 		Width: m.Width, Height: m.Height, ByteSize: m.ByteSize,
-		Position: m.Position, Status: string(m.Status),
+		Position: m.Position, Status: string(m.Status), CardURL: m.CardKey,
 	}
 }
 

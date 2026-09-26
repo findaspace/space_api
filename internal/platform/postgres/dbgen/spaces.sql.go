@@ -23,7 +23,7 @@ INSERT INTO spaces (
     $12, $13, $14, $15, $16, $17,
     $18, $19, $20, $21
 )
-RETURNING id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at
+RETURNING id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at, review_count, rating_sum, photo_count, completeness
 `
 
 type CreateSpaceParams struct {
@@ -102,12 +102,16 @@ func (q *Queries) CreateSpace(ctx context.Context, arg CreateSpaceParams) (Space
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReviewCount,
+		&i.RatingSum,
+		&i.PhotoCount,
+		&i.Completeness,
 	)
 	return i, err
 }
 
 const getPublishedSpaceBySlug = `-- name: GetPublishedSpaceBySlug :one
-SELECT id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at FROM spaces
+SELECT id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at, review_count, rating_sum, photo_count, completeness FROM spaces
 WHERE slug = $1 AND status = 'published'
 `
 
@@ -141,12 +145,16 @@ func (q *Queries) GetPublishedSpaceBySlug(ctx context.Context, slug string) (Spa
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReviewCount,
+		&i.RatingSum,
+		&i.PhotoCount,
+		&i.Completeness,
 	)
 	return i, err
 }
 
 const getSpaceByID = `-- name: GetSpaceByID :one
-SELECT id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at FROM spaces WHERE id = $1
+SELECT id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at, review_count, rating_sum, photo_count, completeness FROM spaces WHERE id = $1
 `
 
 func (q *Queries) GetSpaceByID(ctx context.Context, id uuid.UUID) (Space, error) {
@@ -179,12 +187,16 @@ func (q *Queries) GetSpaceByID(ctx context.Context, id uuid.UUID) (Space, error)
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReviewCount,
+		&i.RatingSum,
+		&i.PhotoCount,
+		&i.Completeness,
 	)
 	return i, err
 }
 
 const getSpaceForHost = `-- name: GetSpaceForHost :one
-SELECT id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at FROM spaces
+SELECT id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at, review_count, rating_sum, photo_count, completeness FROM spaces
 WHERE id = $1 AND host_id = $2
 `
 
@@ -223,12 +235,16 @@ func (q *Queries) GetSpaceForHost(ctx context.Context, arg GetSpaceForHostParams
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReviewCount,
+		&i.RatingSum,
+		&i.PhotoCount,
+		&i.Completeness,
 	)
 	return i, err
 }
 
 const listSpacesForHost = `-- name: ListSpacesForHost :many
-SELECT id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at FROM spaces
+SELECT id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at, review_count, rating_sum, photo_count, completeness FROM spaces
 WHERE host_id = $1
 ORDER BY created_at DESC
 LIMIT $3 OFFSET $2
@@ -276,6 +292,10 @@ func (q *Queries) ListSpacesForHost(ctx context.Context, arg ListSpacesForHostPa
 			&i.PublishedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReviewCount,
+			&i.RatingSum,
+			&i.PhotoCount,
+			&i.Completeness,
 		); err != nil {
 			return nil, err
 		}
@@ -295,7 +315,7 @@ UPDATE spaces SET
         ELSE published_at
     END
 WHERE id = $2 AND status = $3
-RETURNING id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at
+RETURNING id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at, review_count, rating_sum, photo_count, completeness
 `
 
 type SetSpaceStatusParams struct {
@@ -334,8 +354,57 @@ func (q *Queries) SetSpaceStatus(ctx context.Context, arg SetSpaceStatusParams) 
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReviewCount,
+		&i.RatingSum,
+		&i.PhotoCount,
+		&i.Completeness,
 	)
 	return i, err
+}
+
+const spaceSummaries = `-- name: SpaceSummaries :many
+SELECT id, slug, title, latitude, longitude, locality, landmark, digital_address
+FROM spaces WHERE id = ANY($1::uuid[])
+`
+
+type SpaceSummariesRow struct {
+	ID             uuid.UUID
+	Slug           string
+	Title          string
+	Latitude       float64
+	Longitude      float64
+	Locality       string
+	Landmark       string
+	DigitalAddress string
+}
+
+func (q *Queries) SpaceSummaries(ctx context.Context, ids []uuid.UUID) ([]SpaceSummariesRow, error) {
+	rows, err := q.db.Query(ctx, spaceSummaries, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SpaceSummariesRow{}
+	for rows.Next() {
+		var i SpaceSummariesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Title,
+			&i.Latitude,
+			&i.Longitude,
+			&i.Locality,
+			&i.Landmark,
+			&i.DigitalAddress,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateSpace = `-- name: UpdateSpace :one
@@ -357,7 +426,7 @@ UPDATE spaces SET
 WHERE id = $15
   AND host_id = $16
   AND status IN ('draft', 'in_review')
-RETURNING id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at
+RETURNING id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at, review_count, rating_sum, photo_count, completeness
 `
 
 type UpdateSpaceParams struct {
@@ -426,6 +495,10 @@ func (q *Queries) UpdateSpace(ctx context.Context, arg UpdateSpaceParams) (Space
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReviewCount,
+		&i.RatingSum,
+		&i.PhotoCount,
+		&i.Completeness,
 	)
 	return i, err
 }

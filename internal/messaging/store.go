@@ -26,6 +26,34 @@ func scanThread(row pgx.Row) (Thread, error) {
 	return t, err
 }
 
+// LastMessages returns the newest message body of each thread, in one query
+// for a whole inbox rather than one per conversation. Bodies are stored
+// already redacted, so a preview reveals nothing the conversation would not.
+func (s *Store) LastMessages(ctx context.Context, threadIDs []uuid.UUID) (map[uuid.UUID]string, error) {
+	out := make(map[uuid.UUID]string, len(threadIDs))
+	if len(threadIDs) == 0 {
+		return out, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (thread_id) thread_id, body
+		FROM messages
+		WHERE thread_id = ANY($1::uuid[])
+		ORDER BY thread_id, id DESC`, threadIDs)
+	if err != nil {
+		return nil, fmt.Errorf("last messages: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id uuid.UUID
+		var body string
+		if err := rows.Scan(&id, &body); err != nil {
+			return nil, fmt.Errorf("scan last message: %w", err)
+		}
+		out[id] = body
+	}
+	return out, rows.Err()
+}
+
 // OpenThread returns the guest's existing thread for a space or creates it. The
 // unique constraint makes this safe under concurrent first messages.
 func (s *Store) OpenThread(ctx context.Context, spaceID, guestID, hostID uuid.UUID) (Thread, error) {
