@@ -1497,3 +1497,32 @@ paths:
                 type: object
                 properties:
                   marked: { type: integer }
+
+  /v1/spaces/{id}/contact:
+    get:
+      summary: The owner's name and phone number, for a signed-in renter
+      description: |
+        Only published listings. Every reveal is recorded against the viewer's
+        verified account, and each account may reveal a limited number of
+        numbers a day, so the directory of hosts cannot be scraped.
+      operationId: revealContact
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: The owner's contact
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [display_name, phone]
+                properties:
+                  display_name: { type: string }
+                  phone:
+                    type: string
+                    description: E.164, for example +233244123456.
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }

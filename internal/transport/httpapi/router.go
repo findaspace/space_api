@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/samnart1/space_api/internal/booking"
 	"github.com/samnart1/space_api/internal/calendar"
+	"github.com/samnart1/space_api/internal/contact"
 	"github.com/samnart1/space_api/internal/geo"
 	"github.com/samnart1/space_api/internal/identity"
 	"github.com/samnart1/space_api/internal/listing"
@@ -48,6 +49,7 @@ type Deps struct {
 	Metrics        *metrics.Metrics
 	Geo            *geo.Service
 	BFFSecret      string
+	Contact        *contact.Service
 }
 
 type Limiters struct {
@@ -81,12 +83,15 @@ func NewRouter(d Deps) http.Handler {
 	authed := RequireAuth(d.Tokens)
 
 	nh := notifyHandler{svc: d.Notify}
+	// ch := contactHandler{svc: d.Contact}
 
 	mux.Handle("GET /v1/notifications", authed(http.HandlerFunc(nh.inbox)))
 
 	mux.Handle("POST /v1/notifications/read-all", authed(http.HandlerFunc(nh.markAllRead)))
 	mux.Handle("POST /v1/notifications/{id}/read", authed(http.HandlerFunc(nh.markRead)))
 	mux.Handle("PUT /v1/notifications/preferences", authed(http.HandlerFunc(nh.setPreference)))
+
+	// mux.Handle("GET /v1/spaces/{id}/contact", authed(readLimit(http.HandlerFunc(ch.reveal))))
 
 	// mux.HandleFunc("GET /v1/search", sh.search)
 
