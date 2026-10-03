@@ -95,7 +95,7 @@ func (s *Service) RequestOTP(ctx context.Context, rawPhone, ip string) (OTPResul
 		return OTPResult{}, err
 	}
 
-	body := fmt.Sprintf("%s is your Space verification code. It expires in %d minutes.",
+	body := fmt.Sprintf("%s is your Findaspace verification code. It expires in %d minutes.",
 		code, int(s.cfg.OTPTTL.Minutes()))
 
 	if err := s.sender.Send(ctx, phone, body); err != nil {

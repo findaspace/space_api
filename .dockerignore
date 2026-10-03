@@ -1,0 +1,7 @@
+.git
+bin
+artifacts
+node_modules
+.env*
+!.env.example
+!.env.production.example

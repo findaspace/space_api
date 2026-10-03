@@ -35,12 +35,15 @@ type Config struct {
 	RefreshTTL  time.Duration
 	SMSProvider string
 
-	OTPMaxAttempts int
-	OTPWindow      time.Duration
-	OTPMaxPerPhone int
-	OTPMaxPerIp    int
-	SessionMaxAge  time.Duration
-	TrustProxy     bool
+	OTPMaxAttempts  int
+	OTPWindow       time.Duration
+	OTPMaxPerPhone  int
+	OTPMaxPerIp     int
+	SessionMaxAge   time.Duration
+	TrustProxy      bool
+	DirectContact   bool
+	ContactDailyCap int
+	PaymentsEnabled bool
 
 	StorageEndpoint      string
 	StorageRegion        string
@@ -76,7 +79,8 @@ type Config struct {
 	DBExecMode       string
 	DBStatementCache int
 
-	MetricsAddr string
+	MetricsAddr       string
+	WorkerConcurrency int
 
 	FeeNightlyBps    int
 	FeeTermBps       int
@@ -202,7 +206,7 @@ func Load() (Config, error) {
 
 		DatabaseUrl:    l.str("SPACE_DATABASE_URL", ""),
 		DBMaxConns:     l.int32("SPACE_DB_MAX_CONNS", 10),
-		DBMinConns:     l.int32("SPACE_DM_MIN_CONNS", 2),
+		DBMinConns:     l.int32("SPACE_DB_MIN_CONNS", 2),
 		DBConnLifetime: l.duration("SPACE_DB_CONN_LIFETIME", 55*time.Minute),
 		DBPingTimeout:  l.duration("SPACE_DB_PING_TIMEOUT", 2*time.Second),
 
@@ -217,12 +221,15 @@ func Load() (Config, error) {
 		RefreshTTL:  l.duration("SPACE_REFRESH_TTL", 720*time.Hour),
 		SMSProvider: l.str("SPACE_SMS_PROVIDER", "log"),
 
-		OTPMaxAttempts: l.int("SPACE_OTP_MAX_ATTEMPTS", 5),
-		OTPWindow:      l.duration("SPACE_OTP_WINDOW", 15*time.Minute),
-		OTPMaxPerPhone: l.int("SPACE_OTP_MAX_PER_PHONE", 3),
-		OTPMaxPerIp:    l.int("SPACE_OTP_MAX_PER_IP", 15),
-		SessionMaxAge:  l.duration("SPACEP_SESSION_MAX_AGE", 2160*time.Hour),
-		TrustProxy:     l.boolean("SPACE_TRUST_PROXY", false),
+		OTPMaxAttempts:  l.int("SPACE_OTP_MAX_ATTEMPTS", 5),
+		OTPWindow:       l.duration("SPACE_OTP_WINDOW", 15*time.Minute),
+		OTPMaxPerPhone:  l.int("SPACE_OTP_MAX_PER_PHONE", 3),
+		OTPMaxPerIp:     l.int("SPACE_OTP_MAX_PER_IP", 15),
+		SessionMaxAge:   l.duration("SPACEP_SESSION_MAX_AGE", 2160*time.Hour),
+		TrustProxy:      l.boolean("SPACE_TRUST_PROXY", false),
+		DirectContact:   l.boolean("SPACE_DIRECT_CONTACT", true),
+		ContactDailyCap: l.int("SPACE_CONTACT_DAILY_CAP", 20),
+		PaymentsEnabled: l.boolean("SPACE_PAYMENTS_ENABLED", false),
 
 		StorageEndpoint:      l.str("SPACE_STORAGE_ENDPOINT", ""),
 		StorageRegion:        l.str("SPACE_STORAGE_REGION", "auto"),
@@ -239,9 +246,9 @@ func Load() (Config, error) {
 
 		BookingHoldTTL: l.duration("SPACE_BOOKING_HOLD_TTL", 30*time.Minute),
 
-		PaystackSecret:      l.str("SPACE_PAYSTACK_SECRET", ""),
+		PaystackSecret:      strings.TrimSpace(os.Getenv("SPACE_PAYSTACK_SECRET")),
 		PaystackBaseURL:     l.str("SPACE_PAYSTACK_BASE_URL", "https://api.paystack.co"),
-		PaystackCallbackURL: l.str("SPACE_PAYSTACK_CALLBACK_URL", ""),
+		PaystackCallbackURL: strings.TrimSpace(os.Getenv("SPACE_PAYSTACK_CALLBACK_URL")),
 		PaystackTimeout:     l.duration("SPACE_PAYSTACK_TIMEOUT", 20*time.Second),
 		PayoutHoldDays:      l.int("SPACE_PAYOUT_HOLD_DAYS", 2),
 
@@ -259,7 +266,8 @@ func Load() (Config, error) {
 		DBExecMode:       l.str("SPACE_DB_EXEC_MODE", "cache_statement"),
 		DBStatementCache: l.int("SPACE_DB_STATEMENT_CACHE", 512),
 
-		MetricsAddr: l.str("SPACE_METRICS_ADDR", ":9091"),
+		MetricsAddr:       l.str("SPACE_METRICS_ADDR", ":9091"),
+		WorkerConcurrency: l.int("SPACE_WORKER_CONCURRENCY", 10),
 
 		FeeNightlyBps:    l.int("SPACE_FEE_NIGHTLY_BPS", 1000),
 		FeeTermBps:       l.int("SPACE_FEE_TERM_BPS", 1000),
@@ -299,16 +307,24 @@ func Load() (Config, error) {
 	if len(problems) > 0 {
 		return Config{}, fmt.Errorf("config: %s", strings.Join(problems, "; "))
 	}
-	if cfg.SMSProvider == "log" && cfg.IsProduction() {
-		problems = append(problems, "SPACE_SMS_PROVIDER=log writes OTP codes to the log and is refused in prod")
+	if cfg.SMSProvider != "log" && cfg.SMSProvider != "arkesel" {
+		problems = append(problems, "SPACE_SMS_PROVIDER must be log or arkesel")
 	}
 	if cfg.SMSProvider == "log" && cfg.IsProduction() {
 		problems = append(problems, "SPACE_SMS_PROVIDER=log writes OTP codes to the log and is refused in production")
 	}
-	if cfg.IsProduction() && !strings.HasPrefix(cfg.PaystackSecret, "sk_live_") {
+	if cfg.SMSProvider == "arkesel" {
+		if cfg.ArkeselAPIKey == "unset" || len(cfg.ArkeselAPIKey) < 8 {
+			problems = append(problems, "SPACE_ARKESEL_API_KEY is required for arkesel")
+		}
+		if len(cfg.SMSSenderID) > 11 {
+			problems = append(problems, "SPACE_SMS_SENDER_ID must be at most 11 characters")
+		}
+	}
+	if cfg.IsProduction() && cfg.PaymentsEnabled && !strings.HasPrefix(cfg.PaystackSecret, "sk_live_") {
 		problems = append(problems, "SPACE_PAYSTACK_SECRET must be a live key in production")
 	}
-	if cfg.IsProduction() && cfg.PaystackBaseURL != "https://api.paystack.co" {
+	if cfg.IsProduction() && cfg.PaymentsEnabled && cfg.PaystackBaseURL != "https://api.paystack.co" {
 		problems = append(problems, "SPACE_PAYSTACK_BASE_URL must be Paystack in production")
 	}
 	if len(problems) > 0 {
@@ -333,6 +349,9 @@ func Load() (Config, error) {
 		problems = append(problems, "SPACE_BOOKING_REQUEST_TTL and SPACE_BOOKING_PAYMENT_TTL must be at least an hour")
 	}
 
+	if len(problems) > 0 {
+		return Config{}, fmt.Errorf("config: %s", strings.Join(problems, "; "))
+	}
 	return cfg, nil
 }
 

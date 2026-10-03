@@ -47,12 +47,19 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// River uses LISTEN/NOTIFY: prefer a direct connection when the API uses a pooler.
+	databaseURL := os.Getenv("SPACE_DATABASE_DIRECT_URL")
+	if databaseURL == "" {
+		databaseURL = cfg.DatabaseUrl
+	}
 	pool, err := postgres.NewPool(ctx, postgres.Config{
-		URL:          cfg.DatabaseUrl,
-		MaxConns:     cfg.DBMaxConns,
-		MinConns:     cfg.DBMinConns,
-		ConnLifetime: cfg.DBConnLifetime,
-		PingTimeout:  cfg.DBPingTimeout,
+		URL:               databaseURL,
+		MaxConns:          cfg.DBMaxConns,
+		MinConns:          cfg.DBMinConns,
+		ConnLifetime:      cfg.DBConnLifetime,
+		PingTimeout:       cfg.DBPingTimeout,
+		ExecMode:          cfg.DBExecMode,
+		StatementCacheCap: cfg.DBStatementCache,
 	})
 	if err != nil {
 		return err
@@ -70,7 +77,7 @@ func run() error {
 	}
 
 	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
-		Queues:          map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: 10}},
+		Queues:          map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: cfg.WorkerConcurrency}},
 		Workers:         workers,
 		PeriodicJobs:    jobs.Periodic(),
 		SoftStopTimeout: 30 * time.Second,
@@ -80,7 +87,7 @@ func run() error {
 		return fmt.Errorf("river client: %w", err)
 	}
 
-	log.Info("worker starting", slog.Int("max_workers", 10))
+	log.Info("worker starting", slog.Int("max_workers", cfg.WorkerConcurrency))
 
 	if err := client.Start(ctx); err != nil {
 		return fmt.Errorf("start river: %w", err)

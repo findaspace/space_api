@@ -125,21 +125,63 @@ func (s *Store) NextPosition(ctx context.Context, spaceID uuid.UUID) (int32, err
 
 // Delete removes the row and returns the key so the caller can drop the object.
 func (s *Store) Delete(ctx context.Context, id, spaceID uuid.UUID) (string, error) {
-	key, err := s.q.DeleteMedia(ctx, dbgen.DeleteMediaParams{ID: id, SpaceID: spaceID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrNotFound
-	}
-	if err != nil {
-		return "", fmt.Errorf("delete media: %w", err)
-	}
-	return key, nil
+	var key string
+	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		var status string
+		if err := tx.QueryRow(ctx, "SELECT status FROM spaces WHERE id=$1 FOR UPDATE", spaceID).Scan(&status); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrNotFound
+			}
+			return err
+		}
+		var mediaStatus string
+		if err := tx.QueryRow(ctx, "SELECT object_key,status FROM space_media WHERE id=$1 AND space_id=$2 FOR UPDATE", id, spaceID).Scan(&key, &mediaStatus); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrNotFound
+			}
+			return err
+		}
+		if status == "published" && mediaStatus == "ready" {
+			var count int
+			if err := tx.QueryRow(ctx, "SELECT count(*) FROM space_media WHERE space_id=$1 AND status='ready'", spaceID).Scan(&count); err != nil {
+				return err
+			}
+			if count <= 1 {
+				return ErrLastPhoto
+			}
+		}
+		_, err := tx.Exec(ctx, "DELETE FROM space_media WHERE id=$1 AND space_id=$2", id, spaceID)
+		return err
+	})
+	return key, err
 }
 
 // Reorder rewrites every position in one transaction. Partial reordering would
 // leave the gallery in an order nobody chose.
 func (s *Store) Reorder(ctx context.Context, spaceID uuid.UUID, ids []uuid.UUID) error {
 	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		var locked uuid.UUID
+		if err := tx.QueryRow(ctx, "SELECT id FROM spaces WHERE id=$1 FOR UPDATE", spaceID).Scan(&locked); err != nil {
+			return err
+		}
 		q := s.q.WithTx(tx)
+		existing, err := q.ListMedia(ctx, spaceID)
+		if err != nil {
+			return err
+		}
+		if len(existing) != len(ids) {
+			return ErrNotFound
+		}
+		owned := make(map[uuid.UUID]bool, len(existing))
+		for _, m := range existing {
+			owned[m.ID] = true
+		}
+		for _, id := range ids {
+			if !owned[id] {
+				return ErrNotFound
+			}
+			delete(owned, id)
+		}
 		for i, id := range ids {
 			if err := q.SetMediaPosition(ctx, dbgen.SetMediaPositionParams{
 				ID: id, SpaceID: spaceID, Position: int32(i),
@@ -178,4 +220,34 @@ func (s *Store) Abandoned(ctx context.Context, olderThan time.Duration, limit in
 func isUniqueViolation(err error, constraint string) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.ConstraintName == constraint
+}
+
+// Reserve serialises upload tickets per space so simultaneous requests cannot exceed the photo limit.
+func (s *Store) Reserve(ctx context.Context, id, spaceID uuid.UUID, key, contentType string, maxPhotos int) (Media, error) {
+	var result Media
+	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		var locked uuid.UUID
+		if err := tx.QueryRow(ctx, "SELECT id FROM spaces WHERE id=$1 FOR UPDATE", spaceID).Scan(&locked); err != nil {
+			return err
+		}
+		q := s.q.WithTx(tx)
+		count, err := q.CountMedia(ctx, spaceID)
+		if err != nil {
+			return err
+		}
+		if count >= int64(maxPhotos) {
+			return ErrTooMany
+		}
+		position, err := q.NextMediaPosition(ctx, spaceID)
+		if err != nil {
+			return err
+		}
+		row, err := q.CreateMedia(ctx, dbgen.CreateMediaParams{ID: id, SpaceID: spaceID, ObjectKey: key, ContentType: contentType, Position: position})
+		if err != nil {
+			return err
+		}
+		result = toDomain(row)
+		return nil
+	})
+	return result, err
 }

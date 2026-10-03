@@ -1,31 +1,17 @@
 name: space
-
 services:
   api:
     image: ghcr.io/samnart1/space_api:${TAG:-latest}
     restart: unless-stopped
     env_file: [.env.production]
-    ports:
-      - "127.0.0.1:8080:8080"     # behind the reverse proxy, never public
+    ports: ["127.0.0.1:8080:8080"]
     healthcheck:
       test: ["CMD", "/api", "-healthcheck"]
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 10s
-    deploy:
-      replicas: 2
-
   worker:
-    image: ghcr.io/samnart1/space_api:${TAG:-latest}
-    command: ["/worker"]
+    image: ghcr.io/samnart1/space_api-worker:${TAG:-latest}
     restart: unless-stopped
     env_file: [.env.production]
-    # One replica. River elects a leader for periodic jobs, so more would be
-    # safe, but there is no work here that needs them yet.
-    deploy:
-      replicas: 1
-
-  worker:
-    image: ghcr.io/samnart1/space_worker:${TAG:-latest}
-    command: []

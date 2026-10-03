@@ -24,32 +24,34 @@ import (
 )
 
 type Deps struct {
-	Pool           *pgxpool.Pool
-	Logger         *slog.Logger
-	PingTimeout    time.Duration
-	MaxBodyBytes   int64
-	Version        string
-	Commit         string
-	Identity       *identity.Service
-	Tokens         *identity.TokenIssuer
-	TrustProxy     bool
-	Listing        *listing.Service
-	Media          *media.Service
-	Calendar       *calendar.Service
-	Booking        *booking.Service
-	Payment        *payment.Service
-	Payout         *payout.Service
-	Messaging      *messaging.Service
-	Review         *review.Service
-	Notify         *notify.Service
-	Search         *search.Service
-	Limits         Limiters
-	CORSOrigins    []string
-	RequestTimeout time.Duration
-	Metrics        *metrics.Metrics
-	Geo            *geo.Service
-	BFFSecret      string
-	Contact        *contact.Service
+	Pool            *pgxpool.Pool
+	Logger          *slog.Logger
+	PingTimeout     time.Duration
+	MaxBodyBytes    int64
+	Version         string
+	Commit          string
+	Identity        *identity.Service
+	Tokens          *identity.TokenIssuer
+	TrustProxy      bool
+	Listing         *listing.Service
+	Media           *media.Service
+	Calendar        *calendar.Service
+	Booking         *booking.Service
+	Payment         *payment.Service
+	Payout          *payout.Service
+	Messaging       *messaging.Service
+	Review          *review.Service
+	Notify          *notify.Service
+	Search          *search.Service
+	Limits          Limiters
+	CORSOrigins     []string
+	RequestTimeout  time.Duration
+	Metrics         *metrics.Metrics
+	Geo             *geo.Service
+	BFFSecret       string
+	Contact         *contact.Service
+	PaymentsEnabled bool
+	DirectContact   bool
 }
 
 type Limiters struct {
@@ -83,7 +85,7 @@ func NewRouter(d Deps) http.Handler {
 	authed := RequireAuth(d.Tokens)
 
 	nh := notifyHandler{svc: d.Notify}
-	// ch := contactHandler{svc: d.Contact}
+	contactH := contactHandler{svc: d.Contact}
 
 	mux.Handle("GET /v1/notifications", authed(http.HandlerFunc(nh.inbox)))
 
@@ -91,11 +93,15 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /v1/notifications/{id}/read", authed(http.HandlerFunc(nh.markRead)))
 	mux.Handle("PUT /v1/notifications/preferences", authed(http.HandlerFunc(nh.setPreference)))
 
-	// mux.Handle("GET /v1/spaces/{id}/contact", authed(readLimit(http.HandlerFunc(ch.reveal))))
+	if d.DirectContact {
+		mux.Handle("GET /v1/spaces/{id}/contact", authed(readLimit(http.HandlerFunc(contactH.reveal))))
+	}
 
 	// mux.HandleFunc("GET /v1/search", sh.search)
 
-	mux.Handle("POST /v1/bookings/{id}/pay", authed(http.HandlerFunc(ph.intent)))
+	if d.PaymentsEnabled {
+		mux.Handle("POST /v1/bookings/{id}/pay", authed(http.HandlerFunc(ph.intent)))
+	}
 	// mux.HandleFunc("POST /v1/webhooks/paystack", ph.webhook)
 
 	lh := listingHandler{svc: d.Listing}
@@ -117,7 +123,9 @@ func NewRouter(d Deps) http.Handler {
 	// mux.Handle("POST /v1/threads/{id}/messages", authed(http.HandlerFunc(msgH.reply)))
 	mux.Handle("POST /v1/threads/{id}/read", authed(http.HandlerFunc(msgH.markRead)))
 
-	mux.Handle("POST /v1/bookings/{id}/reviews", authed(http.HandlerFunc(rh.write)))
+	if d.PaymentsEnabled {
+		mux.Handle("POST /v1/bookings/{id}/reviews", authed(http.HandlerFunc(rh.write)))
+	}
 	// mux.HandleFunc("GET /v1/listings/{slug}/reviews", rh.forListing)
 
 	// mux.HandleFunc("GET /v1/listings/{slug}/media", mediaH.listPublic)
@@ -147,10 +155,18 @@ func NewRouter(d Deps) http.Handler {
 		return Chain(h, authed, RequireRole(identity.RoleHost))
 	}
 
-	mux.Handle("PUT /v1/payouts/account", hostOnly(poh.saveAccount))
-	mux.Handle("GET /v1/payouts/balance", hostOnly(poh.balance))
-	mux.Handle("GET /v1/payouts", hostOnly(poh.list))
-	mux.Handle("GET /v1/payouts/account", hostOnly(poh.getAccount))
+	if d.PaymentsEnabled {
+		mux.Handle("PUT /v1/payouts/account", hostOnly(poh.saveAccount))
+	}
+	if d.PaymentsEnabled {
+		mux.Handle("GET /v1/payouts/balance", hostOnly(poh.balance))
+	}
+	if d.PaymentsEnabled {
+		mux.Handle("GET /v1/payouts", hostOnly(poh.list))
+	}
+	if d.PaymentsEnabled {
+		mux.Handle("GET /v1/payouts/account", hostOnly(poh.getAccount))
+	}
 
 	mux.Handle("GET /healthz", handleLive(d.Version, d.Commit))
 	mux.Handle("GET /readyz", handleReady(d.Pool, d.PingTimeout))
@@ -180,29 +196,49 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("DELETE /v1/spaces/{id}/blocks/{blockId}", authed(http.HandlerFunc(ch.deleteBlock)))
 
 	// mux.Handle("POST /v1/bookings", authed(http.HandlerFunc(bh.create)))
-	mux.Handle("GET /v1/bookings", authed(http.HandlerFunc(bh.list)))
-	mux.Handle("GET /v1/bookings/{id}", authed(http.HandlerFunc(bh.get)))
-	mux.Handle("GET /v1/bookings/{id}/refund-quote", authed(http.HandlerFunc(bh.refundQuote)))
-	mux.Handle("POST /v1/bookings/{id}/cancel", authed(http.HandlerFunc(bh.cancel)))
-	mux.Handle("POST /v1/bookings/{id}/approve", authed(http.HandlerFunc(bh.approve)))
-	mux.Handle("POST /v1/bookings/{id}/decline", authed(http.HandlerFunc(bh.decline)))
+	if d.PaymentsEnabled {
+		mux.Handle("GET /v1/bookings", authed(http.HandlerFunc(bh.list)))
+	}
+	if d.PaymentsEnabled {
+		mux.Handle("GET /v1/bookings/{id}", authed(http.HandlerFunc(bh.get)))
+	}
+	if d.PaymentsEnabled {
+		mux.Handle("GET /v1/bookings/{id}/refund-quote", authed(http.HandlerFunc(bh.refundQuote)))
+	}
+	if d.PaymentsEnabled {
+		mux.Handle("POST /v1/bookings/{id}/cancel", authed(http.HandlerFunc(bh.cancel)))
+	}
+	if d.PaymentsEnabled {
+		mux.Handle("POST /v1/bookings/{id}/approve", authed(http.HandlerFunc(bh.approve)))
+	}
+	if d.PaymentsEnabled {
+		mux.Handle("POST /v1/bookings/{id}/decline", authed(http.HandlerFunc(bh.decline)))
+	}
 
 	mux.Handle("GET /v1/search", readLimit(http.HandlerFunc(sh.search)))
 	mux.Handle("GET /v1/listings/{slug}", readLimit(http.HandlerFunc(lh.getPublic)))
 	mux.Handle("GET /v1/listings/{slug}/media", readLimit(http.HandlerFunc(mediaH.listPublic)))
-	mux.Handle("GET /v1/listings/{slug}/quote", readLimit(http.HandlerFunc(ch.quote)))
+	if d.PaymentsEnabled {
+		mux.Handle("GET /v1/listings/{slug}/quote", readLimit(http.HandlerFunc(ch.quote)))
+	}
 	mux.Handle("GET /v1/listings/{slug}/calendar", readLimit(http.HandlerFunc(ch.publicCalendar)))
 	mux.Handle("GET /v1/listings/{slug}/reviews", readLimit(http.HandlerFunc(rh.forListing)))
 	mux.Handle("GET /v1/space-types", readLimit(http.HandlerFunc(lh.spaceTypes)))
 
-	mux.Handle("POST /v1/bookings", authed(writeLimit(http.HandlerFunc(bh.create))))
+	if d.PaymentsEnabled {
+		mux.Handle("POST /v1/bookings", authed(writeLimit(http.HandlerFunc(bh.create))))
+	}
 	mux.Handle("POST /v1/spaces", authed(writeLimit(http.HandlerFunc(lh.create))))
 	mux.Handle("POST /v1/spaces/{id}/media", authed(writeLimit(http.HandlerFunc(mediaH.requestUpload))))
 	mux.Handle("POST /v1/spaces/{id}/messages", authed(writeLimit(http.HandlerFunc(msgH.send))))
 	mux.Handle("POST /v1/threads/{id}/messages", authed(writeLimit(http.HandlerFunc(msgH.reply))))
-	mux.Handle("POST /v1/payouts", authed(writeLimit(http.HandlerFunc(poh.request))))
+	if d.PaymentsEnabled {
+		mux.Handle("POST /v1/payouts", authed(writeLimit(http.HandlerFunc(poh.request))))
+	}
 
-	mux.Handle("POST /v1/webhooks/paystack", hookLimit(http.HandlerFunc(ph.webhook)))
+	if d.PaymentsEnabled {
+		mux.Handle("POST /v1/webhooks/paystack", hookLimit(http.HandlerFunc(ph.webhook)))
+	}
 
 	mux.Handle("POST /v1/spaces/{id}/video", authed(writeLimit(http.HandlerFunc(videoH.request))))
 	mux.Handle("POST /v1/spaces/{id}/video/confirm", authed(http.HandlerFunc(videoH.confirm)))

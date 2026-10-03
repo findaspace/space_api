@@ -71,7 +71,7 @@ type NightlyInput struct {
 }
 
 func QuoteNightly(in NightlyInput) (Quote, error) {
-	if in.Space.Mode != "nightly" {
+	if in.Space.Mode != "nightly" || (in.Space.PricePeriod != "night" && in.Space.PricePeriod != "") {
 		return Quote{}, ErrModeMismatch
 	}
 	if in.Space.Status != "published" {
@@ -179,7 +179,7 @@ type TermInput struct {
 // DueNow: Ghanaian landlords routinely require a year or two of rent up front,
 // and a tenant who only learns that at signing has wasted everyone's time.
 func QuoteTerm(in TermInput) (Quote, error) {
-	if in.Space.Mode != "term" {
+	if in.Space.Mode != "term" || (in.Space.PricePeriod != "month" && in.Space.PricePeriod != "year" && in.Space.PricePeriod != "") {
 		return Quote{}, ErrModeMismatch
 	}
 	if in.Space.Status != "published" {

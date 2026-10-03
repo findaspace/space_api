@@ -39,10 +39,11 @@ type Field struct {
 }
 
 type TypeSchema struct {
-	Type   SpaceType    `json:"type"`
-	Label  string       `json:"label"`
-	Modes  []RentalMode `json:"modes"`
-	Fields []Field      `json:"fields"`
+	Type    SpaceType     `json:"type"`
+	Periods []PricePeriod `json:"price_periods"`
+	Label   string        `json:"label"`
+	Modes   []RentalMode  `json:"modes"`
+	Fields  []Field       `json:"fields"`
 }
 
 type FieldIssue struct {
@@ -103,7 +104,19 @@ var commercialFields = []Field{
 		Options: []string{"none", "van", "truck", "container"}},
 }
 
+var sportsFields = []Field{
+	{Key: "sport", Label: "Sport", Kind: KindEnum, Weight: 3, Filterable: true, Options: []string{"football", "basketball", "tennis", "volleyball", "badminton", "multi_sport", "other"}},
+	{Key: "surface", Label: "Playing surface", Kind: KindEnum, Weight: 3, Filterable: true, Options: []string{"grass", "artificial_turf", "hard_court", "clay", "indoor", "other"}},
+	{Key: "capacity", Label: "Capacity", Kind: KindInt, Weight: 2, Min: n(1), Max: n(100000)},
+	{Key: "floodlights", Label: "Floodlights", Kind: KindBool, Weight: 2, Filterable: true},
+	{Key: "changing_rooms", Label: "Changing rooms", Kind: KindBool, Weight: 1},
+	{Key: "opening_hours", Label: "Opening hours", Kind: KindString, Weight: 2},
+}
 var schemas = map[SpaceType]TypeSchema{
+	TypeFootballPitch:  {Label: "Football pitch", Modes: []RentalMode{ModeFlexible}, Fields: sportsFields},
+	TypeSportsCourt:    {Label: "Sports court", Modes: []RentalMode{ModeFlexible}, Fields: sportsFields},
+	TypeSportsFacility: {Label: "Sports facility", Modes: []RentalMode{ModeFlexible}, Fields: sportsFields},
+	TypeStudio:         {Label: "Studio", Modes: []RentalMode{ModeFlexible, ModeTerm}, Fields: join(utilityFields, []Field{{Key: "capacity", Label: "Capacity", Kind: KindInt, Weight: 3, Min: n(1), Max: n(1000)}, {Key: "studio_use", Label: "Studio use", Kind: KindEnum, Weight: 2, Options: []string{"photography", "music", "dance", "film", "multi_use"}}})},
 	TypeRoom: {Label: "Room", Modes: []RentalMode{ModeNightly, ModeTerm},
 		Fields: join(residentialFields, utilityFields)},
 	TypeSelfContained: {Label: "Self contained", Modes: []RentalMode{ModeNightly, ModeTerm},
@@ -125,10 +138,10 @@ var schemas = map[SpaceType]TypeSchema{
 		})},
 
 	TypeShop:      {Label: "Shop", Modes: []RentalMode{ModeTerm}, Fields: join(commercialFields, utilityFields)},
-	TypeOffice:    {Label: "Office", Modes: []RentalMode{ModeTerm}, Fields: join(commercialFields, utilityFields)},
+	TypeOffice:    {Label: "Office", Modes: []RentalMode{ModeTerm, ModeFlexible}, Fields: join(commercialFields, utilityFields)},
 	TypeWarehouse: {Label: "Warehouse", Modes: []RentalMode{ModeTerm}, Fields: join(commercialFields, utilityFields)},
 
-	TypeEventSpace: {Label: "Event space", Modes: []RentalMode{ModeNightly},
+	TypeEventSpace: {Label: "Event space", Modes: []RentalMode{ModeNightly, ModeFlexible},
 		Fields: join(utilityFields, []Field{
 			{Key: "capacity", Label: "Capacity", Kind: KindInt, Weight: 3, Filterable: true, Min: n(1), Max: n(100000)},
 			{Key: "indoor", Label: "Indoor", Kind: KindBool, Weight: 2, Filterable: true},
@@ -146,7 +159,7 @@ var schemas = map[SpaceType]TypeSchema{
 				Options: []string{"residential", "commercial", "agricultural", "industrial", "mixed"}},
 		}},
 
-	TypeParking: {Label: "Parking", Modes: []RentalMode{ModeNightly, ModeTerm},
+	TypeParking: {Label: "Parking", Modes: []RentalMode{ModeNightly, ModeTerm, ModeFlexible},
 		Fields: []Field{
 			{Key: "covered", Label: "Covered", Kind: KindBool, Weight: 3, Filterable: true},
 			{Key: "vehicle_size", Label: "Largest vehicle", Kind: KindEnum, Weight: 3, Filterable: true,
@@ -159,6 +172,9 @@ func init() {
 	// be a chance to get them out of sync.
 	for t, s := range schemas {
 		s.Type = t
+		for _, mode := range s.Modes {
+			s.Periods = append(s.Periods, AllowedPeriods(t, mode)...)
+		}
 		schemas[t] = s
 	}
 }

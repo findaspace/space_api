@@ -3,15 +3,25 @@
     {
       "allowed": {
         "origins": [
-          "https://findaspace.site",
-          "https://www.findaspace.site",
-          "https://space-web-git-main-YOURTEAM.vercel.app",
-          "http://localhost:3000"
+          "https://YOUR-FRONTEND-DOMAIN"
         ],
-        "methods": ["PUT", "GET", "HEAD"],
-        "headers": ["content-type", "range", "if-match"]
+        "methods": [
+          "PUT",
+          "GET",
+          "HEAD"
+        ],
+        "headers": [
+          "content-type",
+          "range",
+          "if-match"
+        ]
       },
-      "exposeHeaders": ["ETag"],
+      "exposeHeaders": [
+        "ETag",
+        "Content-Range",
+        "Content-Length",
+        "Accept-Ranges"
+      ],
       "maxAgeSeconds": 3600
     }
   ]

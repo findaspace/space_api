@@ -73,6 +73,10 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (Space, error) {
 		return Space{}, err
 	}
 
+	if err := ValidateDetails(Space{Type: in.Type, Mode: in.Mode, Title: in.Title, Description: in.Description, BasePriceMinor: in.BasePriceMinor, Currency: strings.ToUpper(defaultString(in.Currency, "GHS")), PricePeriod: in.PricePeriod, DepositMinor: in.DepositMinor, AdvanceMonths: in.AdvanceMonths, MaxOccupancy: max16(in.MaxOccupancy, 1), Location: normalizeLocation(in.Location)}); err != nil {
+		return Space{}, err
+	}
+
 	// Granted before the insert, not after. If the insert then fails the user
 	// holds a spare role, which is harmless; the reverse leaves a host who
 	// cannot act as one.
@@ -119,10 +123,74 @@ func (s *Service) Update(ctx context.Context, id, hostID uuid.UUID, p Patch) (Sp
 		return Space{}, err
 	}
 
+	if current.Status != StatusDraft && current.Status != StatusInReview {
+		return Space{}, ErrBadTransition
+	}
+	next := current
+	if p.Title != nil {
+		v := strings.TrimSpace(*p.Title)
+		p.Title = &v
+		next.Title = v
+	}
+	if p.Description != nil {
+		v := strings.TrimSpace(*p.Description)
+		p.Description = &v
+		next.Description = v
+	}
+	if p.BasePriceMinor != nil {
+		next.BasePriceMinor = *p.BasePriceMinor
+	}
+	if p.DepositMinor != nil {
+		next.DepositMinor = *p.DepositMinor
+	}
+	if p.AdvanceMonths != nil {
+		next.AdvanceMonths = *p.AdvanceMonths
+	}
+	if p.MaxOccupancy != nil {
+		next.MaxOccupancy = *p.MaxOccupancy
+	}
+	if p.PricePeriod != nil {
+		next.PricePeriod = *p.PricePeriod
+	}
+	if p.RentalMode != nil {
+		next.Mode = *p.RentalMode
+	}
+	if p.Latitude != nil {
+		next.Location.Latitude = *p.Latitude
+	}
+	if p.Longitude != nil {
+		next.Location.Longitude = *p.Longitude
+	}
+	if p.Locality != nil {
+		v := strings.TrimSpace(*p.Locality)
+		p.Locality = &v
+		next.Location.Locality = v
+	}
+	if p.Region != nil {
+		v := strings.TrimSpace(*p.Region)
+		p.Region = &v
+		next.Location.Region = v
+	}
+	if p.Landmark != nil {
+		v := strings.TrimSpace(*p.Landmark)
+		p.Landmark = &v
+		next.Location.Landmark = v
+	}
+	if p.DigitalAddress != nil {
+		v := strings.ToUpper(strings.TrimSpace(*p.DigitalAddress))
+		p.DigitalAddress = &v
+		next.Location.DigitalAddress = v
+	}
+	if err := ValidateDetails(next); err != nil {
+		return Space{}, err
+	}
+	if _, err := Validate(next.Type, next.Mode, next.Attributes); err != nil && p.Attributes == nil {
+		return Space{}, err
+	}
 	// Attributes are validated as a whole document. A partial attribute patch
 	// would let a host drop a required field by omission.
 	if p.Attributes != nil {
-		attrs, err := Validate(current.Type, current.Mode, p.Attributes)
+		attrs, err := Validate(next.Type, next.Mode, p.Attributes)
 		if err != nil {
 			return Space{}, err
 		}

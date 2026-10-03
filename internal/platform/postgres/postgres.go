@@ -36,15 +36,9 @@ func NewPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 	pc.ConnConfig.RuntimeParams["application_name"] = "space_api"
 	pc.ConnConfig.RuntimeParams["timezone"] = "UTC"
 
-	pool, err := pgxpool.NewWithConfig(ctx, pc)
-	if err != nil {
-		return nil, fmt.Errorf("create pool: %w", err)
-	}
-
 	// pgx defaults to cache_statement, which prepares each distinct SQL text
-	// and keeps an LRU per connection. Behind a transaction-mode pooler such as
-	// PgBouncer, sessions move between statements and those prepared statements
-	// disappear, so the mode has to be switchable per deployment.
+	// and keeps an LRU per connection. Poolers vary in prepared-statement support,
+	// so the query mode must be applied before creating the pool.
 	switch cfg.ExecMode {
 	case "", "cache_statement":
 		pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeCacheStatement
@@ -62,6 +56,11 @@ func NewPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 
 	if cfg.StatementCacheCap > 0 {
 		pc.ConnConfig.StatementCacheCapacity = cfg.StatementCacheCap
+	}
+
+	pool, err := pgxpool.NewWithConfig(ctx, pc)
+	if err != nil {
+		return nil, fmt.Errorf("create pool: %w", err)
 	}
 
 	pingCtx, cancel := context.WithTimeout(ctx, cfg.PingTimeout)

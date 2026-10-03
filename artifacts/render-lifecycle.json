@@ -1,0 +1,15 @@
+{
+  "checks": [
+    "Render port/concurrency forwarded; SIGTERM stops both children",
+    "api failure terminates sibling and reports failure",
+    "worker failure terminates sibling and reports failure"
+  ],
+  "docker_image_build": "Not run: Docker unavailable; Go binaries and process lifecycle checked locally",
+  "render_deployment": "Not deployed",
+  "blueprints": {
+    "schema": "https://render.com/schema/render.yaml.json",
+    "api": "passed",
+    "frontend": "passed",
+    "plans": "free"
+  }
+}

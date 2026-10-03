@@ -43,20 +43,22 @@ type createSpaceBody struct {
 }
 
 type patchSpaceBody struct {
-	Title          *string        `json:"title"`
-	Description    *string        `json:"description"`
-	BasePriceMinor *int64         `json:"base_price_minor"`
-	DepositMinor   *int64         `json:"deposit_minor"`
-	AdvanceMonths  *int16         `json:"advance_months"`
-	MaxOccupancy   *int16         `json:"max_occupancy"`
-	Latitude       *float64       `json:"latitude"`
-	Longitude      *float64       `json:"longitude"`
-	Locality       *string        `json:"locality"`
-	Region         *string        `json:"region"`
-	Landmark       *string        `json:"landmark"`
-	DigitalAddress *string        `json:"digital_address"`
-	Amenities      []string       `json:"amenities"`
-	Attributes     map[string]any `json:"attributes"`
+	RentalMode     *listing.RentalMode  `json:"rental_mode"`
+	PricePeriod    *listing.PricePeriod `json:"price_period"`
+	Title          *string              `json:"title"`
+	Description    *string              `json:"description"`
+	BasePriceMinor *int64               `json:"base_price_minor"`
+	DepositMinor   *int64               `json:"deposit_minor"`
+	AdvanceMonths  *int16               `json:"advance_months"`
+	MaxOccupancy   *int16               `json:"max_occupancy"`
+	Latitude       *float64             `json:"latitude"`
+	Longitude      *float64             `json:"longitude"`
+	Locality       *string              `json:"locality"`
+	Region         *string              `json:"region"`
+	Landmark       *string              `json:"landmark"`
+	DigitalAddress *string              `json:"digital_address"`
+	Amenities      []string             `json:"amenities"`
+	Attributes     map[string]any       `json:"attributes"`
 }
 
 type spaceResponse struct {
@@ -204,6 +206,7 @@ func (h listingHandler) patch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sp, err := h.svc.Update(r.Context(), id, p.UserID, listing.Patch{
+		RentalMode: body.RentalMode, PricePeriod: body.PricePeriod,
 		Title: body.Title, Description: body.Description,
 		BasePriceMinor: body.BasePriceMinor, DepositMinor: body.DepositMinor,
 		AdvanceMonths: body.AdvanceMonths, MaxOccupancy: body.MaxOccupancy,
@@ -315,6 +318,8 @@ func writeListingError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, listing.ErrNotFound):
 		WriteProblem(w, r, Problem{Status: http.StatusNotFound, Title: "not found"})
+	case errors.Is(err, listing.ErrNotReady):
+		WriteProblem(w, r, Problem{Status: http.StatusUnprocessableEntity, Title: "listing needs a ready photo"})
 	case errors.Is(err, listing.ErrBadTransition):
 		WriteProblem(w, r, Problem{Status: http.StatusConflict, Title: "invalid status change"})
 	case errors.Is(err, listing.ErrConflict):

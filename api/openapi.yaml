@@ -2,592 +2,1184 @@ openapi: 3.1.0
 info:
   title: Space API
   version: 1.0.0
-  description: |
-    Money is always an integer in the currency's minor unit (pesewas for GHS).
+  description: 'Money is always an integer in the currency''s minor unit (pesewas for GHS).
+
     Dates in a booking context are calendar dates, not instants.
+
     Every error is an RFC 9457 problem document.
 
-# The server is the host root. Paths carry their own /v1 prefix, because the
-# health probes live outside it and a spec with /v1 as the base could not
-# describe them.
+    '
 servers:
-  - url: http://localhost:8080
-  - url: https://api.findaspace.gh
-
+- url: http://localhost:8080
+- url: https://api.findaspace.gh
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-
   schemas:
     Problem:
       type: object
-      required: [title, status]
+      required:
+      - title
+      - status
       properties:
-        type: { type: string }
-        title: { type: string }
-        status: { type: integer }
-        detail: { type: string }
-        instance: { type: string }
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
         trace_id:
           type: string
           description: Matches request_id in the server logs.
         errors:
           type: array
-          items: { $ref: "#/components/schemas/FieldError" }
-
+          items:
+            $ref: '#/components/schemas/FieldError'
     FieldError:
       type: object
-      required: [field, code]
+      required:
+      - field
+      - code
       properties:
-        field: { type: string }
-        code: { type: string }
-        detail: { type: string }
-
+        field:
+          type: string
+        code:
+          type: string
+        detail:
+          type: string
     Health:
       type: object
-      required: [status]
+      required:
+      - status
       properties:
         status:
           type: string
-          enum: [ok]
-        version: { type: string }
-
+          enum:
+          - ok
+        version:
+          type: string
     Readiness:
       type: object
-      required: [status]
+      required:
+      - status
       properties:
         status:
           type: string
-          enum: [ok, unavailable]
+          enum:
+          - ok
+          - unavailable
         checks:
           type: object
-          additionalProperties: { type: string }
-
-
+          additionalProperties:
+            type: string
     User:
       type: object
-      required: [id, phone, display_name, roles, created_at]
+      required:
+      - id
+      - phone
+      - display_name
+      - roles
+      - created_at
       properties:
-        id: { type: string, format: uuid }
+        id:
+          type: string
+          format: uuid
         phone:
           type: string
           description: E.164, for example +233244123456.
-        display_name: { type: string }
+        display_name:
+          type: string
         roles:
           type: array
           items:
             type: string
-            enum: [guest, host, admin]
-        created_at: { type: string, format: date-time }
-
+            enum:
+            - guest
+            - host
+            - admin
+        created_at:
+          type: string
+          format: date-time
     TokenResponse:
       type: object
-      required: [user, access_token, token_type, expires_at, refresh_token, refresh_expires_at]
+      required:
+      - user
+      - access_token
+      - token_type
+      - expires_at
+      - refresh_token
+      - refresh_expires_at
       properties:
-        user: { $ref: "#/components/schemas/User" }
-        access_token: { type: string }
+        user:
+          $ref: '#/components/schemas/User'
+        access_token:
+          type: string
         token_type:
           type: string
-          enum: [Bearer]
-        expires_at: { type: string, format: date-time }
-        refresh_token: { type: string }
-        refresh_expires_at: { type: string, format: date-time }
-
+          enum:
+          - Bearer
+        expires_at:
+          type: string
+          format: date-time
+        refresh_token:
+          type: string
+        refresh_expires_at:
+          type: string
+          format: date-time
     OTPSent:
       type: object
-      required: [phone, expires_at]
+      required:
+      - phone
+      - expires_at
       properties:
         phone:
           type: string
           description: Masked. The full number is never echoed back.
-        expires_at: { type: string, format: date-time }
-
+        expires_at:
+          type: string
+          format: date-time
     RefreshRequest:
       type: object
       additionalProperties: false
-      required: [refresh_token]
+      required:
+      - refresh_token
       properties:
-        refresh_token: { type: string }
-
+        refresh_token:
+          type: string
     SearchResult:
       type: object
-      required: [slug, title, space_type, rental_mode, price_minor, currency, price_period, locality, latitude, longitude, photo_count, review_count]
+      required:
+      - slug
+      - title
+      - space_type
+      - rental_mode
+      - price_minor
+      - currency
+      - price_period
+      - locality
+      - latitude
+      - longitude
+      - photo_count
+      - review_count
       properties:
-        slug: { type: string }
-        title: { type: string }
+        slug:
+          type: string
+        title:
+          type: string
         space_type:
           type: string
-          enum: [room, self_contained, chamber_and_hall, apartment, house, boys_quarters, hostel_bed, shop, office, warehouse, event_space, land, parking]
+          enum:
+          - room
+          - self_contained
+          - chamber_and_hall
+          - apartment
+          - house
+          - boys_quarters
+          - hostel_bed
+          - shop
+          - office
+          - warehouse
+          - event_space
+          - land
+          - parking
+          - studio
+          - football_pitch
+          - sports_court
+          - sports_facility
         rental_mode:
           type: string
-          enum: [nightly, term]
+          enum: &id001
+          - nightly
+          - term
+          - flexible
         price_minor:
           type: integer
           format: int64
           description: Minor units. 130000 is GHS 1,300.
-        currency: { type: string }
+        currency:
+          type: string
         price_period:
           type: string
-          enum: [night, week, month, year]
-        locality: { type: string }
+          enum: &id002
+          - night
+          - week
+          - month
+          - year
+          - hour
+          - day
+          - semester
+          - academic_year
+        locality:
+          type: string
         landmark_name:
           type: string
           description: The nearest routed landmark. Absent until the listing has been routed.
         walk_minutes:
           type: integer
           description: Walking time to landmark_name. Absent until routed.
-        latitude: { type: number, format: double }
-        longitude: { type: number, format: double }
-        photo_count: { type: integer }
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        photo_count:
+          type: integer
         cover_url:
           type: string
           description: The card-sized rendition when one exists, otherwise the full image.
-        rating: { type: number, format: double }
-        review_count: { type: integer }
-        distance_m: { type: integer }
-
+        rating:
+          type: number
+          format: double
+        review_count:
+          type: integer
+        distance_m:
+          type: integer
     SearchPage:
       type: object
-      required: [results]
+      required:
+      - results
       properties:
         results:
           type: array
-          items: { $ref: "#/components/schemas/SearchResult" }
+          items:
+            $ref: '#/components/schemas/SearchResult'
         next_cursor:
           type: string
           description: Opaque. Present only when another page exists.
-
     PublicLocation:
       type: object
-      required: [latitude, longitude, locality, region, country, approximate]
+      required:
+      - latitude
+      - longitude
+      - locality
+      - region
+      - country
+      - approximate
       properties:
-        latitude: { type: number, format: double }
-        longitude: { type: number, format: double }
-        locality: { type: string }
-        region: { type: string }
-        country: { type: string }
-        landmark: { type: string }
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        locality:
+          type: string
+        region:
+          type: string
+        country:
+          type: string
+        landmark:
+          type: string
         approximate:
           type: boolean
           description: Always true. The point is snapped to a grid about 550m across until booking.
-
     PublicListing:
       type: object
-      required: [id, slug, space_type, rental_mode, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, location, amenities, attributes]
+      required:
+      - id
+      - slug
+      - space_type
+      - rental_mode
+      - title
+      - description
+      - base_price_minor
+      - currency
+      - price_period
+      - deposit_minor
+      - advance_months
+      - max_occupancy
+      - location
+      - amenities
+      - attributes
       properties:
         id:
           type: string
           format: uuid
           description: The listing's id. Booking and messaging are addressed by it.
-        slug: { type: string }
-        space_type: { $ref: "#/components/schemas/SearchResult/properties/space_type" }
-        rental_mode: { type: string, enum: [nightly, term] }
-        title: { type: string }
-        description: { type: string }
-        base_price_minor: { type: integer, format: int64 }
-        currency: { type: string }
-        price_period: { type: string, enum: [night, week, month, year] }
-        deposit_minor: { type: integer, format: int64 }
-        advance_months: { type: integer }
-        max_occupancy: { type: integer }
-        location: { $ref: "#/components/schemas/PublicLocation" }
+        slug:
+          type: string
+        space_type:
+          $ref: '#/components/schemas/SearchResult/properties/space_type'
+        rental_mode:
+          type: string
+          enum: *id001
+        title:
+          type: string
+        description:
+          type: string
+        base_price_minor:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        price_period:
+          type: string
+          enum: *id002
+        deposit_minor:
+          type: integer
+          format: int64
+        advance_months:
+          type: integer
+        max_occupancy:
+          type: integer
+        location:
+          $ref: '#/components/schemas/PublicLocation'
         amenities:
           type: array
-          items: { type: string }
+          items:
+            type: string
         attributes:
           type: object
           additionalProperties: true
-        published_at: { type: [string, "null"], format: date-time }
-
+        published_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
     Media:
       type: object
-      required: [id, url, width, height, position]
+      required:
+      - id
+      - url
+      - width
+      - height
+      - position
       properties:
-        id: { type: string }
+        id:
+          type: string
         url:
           type: string
           description: The full image, for the listing page.
         card_url:
           type: string
-          description: |
-            A small JPEG rendition, around 60KB. Absent for photos uploaded
-            before renditions existed.
-        content_type: { type: string }
-        width: { type: integer }
-        height: { type: integer }
-        byte_size: { type: integer }
-        position: { type: integer }
-        status: { type: string }
+          description: 'A small JPEG rendition, around 60KB. Absent for photos uploaded
 
+            before renditions existed.
+
+            '
+        content_type:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        byte_size:
+          type: integer
+        position:
+          type: integer
+        status:
+          type: string
     Walk:
       type: object
-      required: [name, kind, minutes, metres]
+      required:
+      - name
+      - kind
+      - minutes
+      - metres
       properties:
-        name: { type: string }
-        kind: { type: string }
-        locality: { type: string }
-        minutes: { type: integer }
-        metres: { type: integer }
-
+        name:
+          type: string
+        kind:
+          type: string
+        locality:
+          type: string
+        minutes:
+          type: integer
+        metres:
+          type: integer
     Video:
       type: object
-      required: [status]
+      required:
+      - status
       properties:
-        status: { type: string, enum: [pending, processing, ready, failed] }
-        video_url: { type: string }
-        poster_url: { type: string }
-        duration_seconds: { type: integer }
-        width: { type: integer }
-        height: { type: integer }
-
+        status:
+          type: string
+          enum:
+          - pending
+          - processing
+          - ready
+          - failed
+        video_url:
+          type: string
+        poster_url:
+          type: string
+        duration_seconds:
+          type: integer
+        width:
+          type: integer
+        height:
+          type: integer
     QuoteLine:
       type: object
-      required: [code, label, amount_minor]
+      required:
+      - code
+      - label
+      - amount_minor
       properties:
-        code: { type: string }
-        label: { type: string }
-        amount_minor: { type: integer, format: int64 }
-
+        code:
+          type: string
+        label:
+          type: string
+        amount_minor:
+          type: integer
+          format: int64
     Quote:
       type: object
-      required: [mode, currency, lines, subtotal_minor, discount_minor, fees_minor, total_minor, due_now_minor]
+      required:
+      - mode
+      - currency
+      - lines
+      - subtotal_minor
+      - discount_minor
+      - fees_minor
+      - total_minor
+      - due_now_minor
       properties:
-        mode: { type: string, enum: [nightly, term] }
-        currency: { type: string }
-        check_in: { type: string, format: date-time }
-        check_out: { type: string, format: date-time }
-        nights: { type: integer }
-        months: { type: integer }
+        mode:
+          type: string
+          enum: *id001
+        currency:
+          type: string
+        check_in:
+          type: string
+          format: date-time
+        check_out:
+          type: string
+          format: date-time
+        nights:
+          type: integer
+        months:
+          type: integer
         lines:
           type: array
-          items: { $ref: "#/components/schemas/QuoteLine" }
-        subtotal_minor: { type: integer, format: int64 }
-        discount_minor: { type: integer, format: int64 }
-        fees_minor: { type: integer, format: int64 }
-        total_minor: { type: integer, format: int64 }
+          items:
+            $ref: '#/components/schemas/QuoteLine'
+        subtotal_minor:
+          type: integer
+          format: int64
+        discount_minor:
+          type: integer
+          format: int64
+        fees_minor:
+          type: integer
+          format: int64
+        total_minor:
+          type: integer
+          format: int64
         due_now_minor:
           type: integer
           format: int64
           description: What leaves the renter's account today, including rent in advance and deposit.
-
     ReviewSummary:
       type: object
-      required: [count, average]
+      required:
+      - count
+      - average
       properties:
-        count: { type: integer }
-        average: { type: number, format: double }
-
+        count:
+          type: integer
+        average:
+          type: number
+          format: double
     FieldSchema:
       type: object
-      required: [key, label, kind]
+      required:
+      - key
+      - label
+      - kind
       properties:
-        key: { type: string }
-        label: { type: string }
-        kind: { type: string, enum: [int, float, bool, enum, string] }
-        weight: { type: integer }
-        unit: { type: string }
+        key:
+          type: string
+        label:
+          type: string
+        kind:
+          type: string
+          enum:
+          - int
+          - float
+          - bool
+          - enum
+          - string
+        weight:
+          type: integer
+        unit:
+          type: string
         options:
           type: array
-          items: { type: string }
-
+          items:
+            type: string
     TypeSchema:
       type: object
-      required: [type, label, fields]
+      required:
+      - type
+      - label
+      - fields
       properties:
-        type: { type: string }
-        label: { type: string }
+        type:
+          type: string
+        label:
+          type: string
         modes:
           type: array
-          items: { type: string }
+          items:
+            type: string
         fields:
           type: array
-          items: { $ref: "#/components/schemas/FieldSchema" }
-
+          items:
+            $ref: '#/components/schemas/FieldSchema'
+        price_periods:
+          type: array
+          items:
+            type: string
+            enum: *id002
     HostLocation:
       type: object
-      required: [latitude, longitude, locality]
+      required:
+      - latitude
+      - longitude
+      - locality
       properties:
-        latitude: { type: number, format: double }
-        longitude: { type: number, format: double }
-        locality: { type: string }
-        region: { type: string }
-        country: { type: string }
-        landmark: { type: string }
-        digital_address: { type: string }
-
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        locality:
+          type: string
+        region:
+          type: string
+        country:
+          type: string
+        landmark:
+          type: string
+        digital_address:
+          type: string
     HostListing:
       type: object
       description: The host's own view. Carries the exact location; never served publicly.
-      required: [id, slug, space_type, rental_mode, status, title, base_price_minor, currency, price_period, location, attributes]
+      required:
+      - id
+      - slug
+      - space_type
+      - rental_mode
+      - status
+      - title
+      - base_price_minor
+      - currency
+      - price_period
+      - location
+      - attributes
       properties:
-        id: { type: string, format: uuid }
-        slug: { type: string }
-        space_type: { $ref: "#/components/schemas/SearchResult/properties/space_type" }
-        rental_mode: { type: string, enum: [nightly, term] }
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        space_type:
+          $ref: '#/components/schemas/SearchResult/properties/space_type'
+        rental_mode:
+          type: string
+          enum: *id001
         status:
           type: string
-          enum: [draft, in_review, published, suspended, archived]
-        title: { type: string }
-        description: { type: string }
-        base_price_minor: { type: integer, format: int64 }
-        currency: { type: string }
-        price_period: { type: string, enum: [night, week, month, year] }
-        deposit_minor: { type: integer, format: int64 }
-        advance_months: { type: integer }
-        max_occupancy: { type: integer }
-        location: { $ref: "#/components/schemas/HostLocation" }
+          enum:
+          - draft
+          - in_review
+          - published
+          - suspended
+          - archived
+        title:
+          type: string
+        description:
+          type: string
+        base_price_minor:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        price_period:
+          type: string
+          enum: *id002
+        deposit_minor:
+          type: integer
+          format: int64
+        advance_months:
+          type: integer
+        max_occupancy:
+          type: integer
+        location:
+          $ref: '#/components/schemas/HostLocation'
         amenities:
           type: array
-          items: { type: string }
+          items:
+            type: string
         attributes:
           type: object
           additionalProperties: true
-        published_at: { type: [string, "null"], format: date-time }
-        created_at: { type: string, format: date-time }
-
+        published_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        host_id:
+          type: string
+          format: uuid
     CreateListing:
       type: object
       additionalProperties: false
-      required: [space_type, rental_mode, title, base_price_minor, price_period, max_occupancy, location]
+      required:
+      - space_type
+      - rental_mode
+      - title
+      - base_price_minor
+      - price_period
+      - max_occupancy
+      - location
       properties:
-        space_type: { $ref: "#/components/schemas/SearchResult/properties/space_type" }
-        rental_mode: { type: string, enum: [nightly, term] }
-        title: { type: string, minLength: 8 }
-        description: { type: string }
-        base_price_minor: { type: integer, format: int64, minimum: 1 }
-        currency: { type: string }
-        price_period: { type: string, enum: [night, week, month, year] }
-        deposit_minor: { type: integer, format: int64, minimum: 0 }
-        advance_months: { type: integer, minimum: 0, maximum: 24 }
-        max_occupancy: { type: integer, minimum: 1, maximum: 500 }
+        space_type:
+          $ref: '#/components/schemas/SearchResult/properties/space_type'
+        rental_mode:
+          type: string
+          enum: *id001
+        title:
+          type: string
+          minLength: 8
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 5000
+        base_price_minor:
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          type: string
+        price_period:
+          type: string
+          enum: *id002
+        deposit_minor:
+          type: integer
+          format: int64
+          minimum: 0
+        advance_months:
+          type: integer
+          minimum: 0
+          maximum: 6
+        max_occupancy:
+          type: integer
+          minimum: 1
+          maximum: 500
         location:
           type: object
           additionalProperties: false
-          required: [latitude, longitude, locality]
+          required:
+          - latitude
+          - longitude
+          - locality
           properties:
-            latitude: { type: number, format: double }
-            longitude: { type: number, format: double }
-            locality: { type: string }
-            region: { type: string }
-            country: { type: string }
-            landmark: { type: string }
-            digital_address: { type: string }
+            latitude:
+              type: number
+              format: double
+            longitude:
+              type: number
+              format: double
+            locality:
+              type: string
+            region:
+              type: string
+            country:
+              type: string
+            landmark:
+              type: string
+            digital_address:
+              type: string
         amenities:
           type: array
-          items: { type: string }
+          items:
+            type: string
         attributes:
           type: object
           additionalProperties: true
-
     UploadTicket:
       type: object
-      required: [media, upload_url, headers]
+      required:
+      - media
+      - upload_url
+      - headers
       properties:
-        media: { $ref: "#/components/schemas/Media" }
-        upload_url: { type: string }
-        expires_at: { type: string, format: date-time }
-        max_bytes: { type: integer, format: int64 }
-        method: { type: string }
+        media:
+          $ref: '#/components/schemas/Media'
+        upload_url:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        max_bytes:
+          type: integer
+          format: int64
+        method:
+          type: string
         headers:
           type: object
-          additionalProperties: { type: string }
-
+          additionalProperties:
+            type: string
     Booking:
       type: object
-      required: [id, reference, space_id, rental_mode, status, starts_on, ends_on, guests, currency, total_minor, due_now_minor, created_at]
+      required:
+      - id
+      - reference
+      - space_id
+      - rental_mode
+      - status
+      - starts_on
+      - ends_on
+      - guests
+      - currency
+      - total_minor
+      - due_now_minor
+      - created_at
       properties:
-        id: { type: string, format: uuid }
-        reference: { type: string }
-        space_id: { type: string, format: uuid }
+        id:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        space_id:
+          type: string
+          format: uuid
         guest:
           type: object
           description: Shown only to the host, so they know who is asking.
-          required: [display_name, member_since, phone_verified]
+          required:
+          - display_name
+          - member_since
+          - phone_verified
           properties:
-            display_name: { type: string }
-            member_since: { type: string, format: date-time }
-            phone_verified: { type: boolean }
+            display_name:
+              type: string
+            member_since:
+              type: string
+              format: date-time
+            phone_verified:
+              type: boolean
         location:
           type: object
-          description: |
-            The exact address. The host always sees it; the guest only once the
+          description: 'The exact address. The host always sees it; the guest only once the
+
             booking is paid (confirmed, active or completed).
-          required: [latitude, longitude, locality]
+
+            '
+          required:
+          - latitude
+          - longitude
+          - locality
           properties:
-            latitude: { type: number, format: double }
-            longitude: { type: number, format: double }
-            locality: { type: string }
-            landmark: { type: string }
-            digital_address: { type: string }
+            latitude:
+              type: number
+              format: double
+            longitude:
+              type: number
+              format: double
+            locality:
+              type: string
+            landmark:
+              type: string
+            digital_address:
+              type: string
         space:
           type: object
           description: The listing, for display. Absent if it could not be loaded.
-          required: [slug, title]
+          required:
+          - slug
+          - title
           properties:
-            slug: { type: string }
-            title: { type: string }
-        rental_mode: { type: string, enum: [nightly, term] }
+            slug:
+              type: string
+            title:
+              type: string
+        rental_mode:
+          type: string
+          enum: *id001
         status:
           type: string
-          enum: [held, approved, confirmed, active, completed, cancelled, declined, expired]
-        starts_on: { type: string, format: date }
-        ends_on: { type: string, format: date }
-        nights: { type: integer }
-        months: { type: integer }
-        guests: { type: integer }
-        currency: { type: string }
-        total_minor: { type: integer, format: int64 }
-        due_now_minor: { type: integer, format: int64 }
-        cancellation_policy: { type: string }
-        refund_minor: { type: integer, format: int64 }
+          enum:
+          - held
+          - approved
+          - confirmed
+          - active
+          - completed
+          - cancelled
+          - declined
+          - expired
+        starts_on:
+          type: string
+          format: date
+        ends_on:
+          type: string
+          format: date
+        nights:
+          type: integer
+        months:
+          type: integer
+        guests:
+          type: integer
+        currency:
+          type: string
+        total_minor:
+          type: integer
+          format: int64
+        due_now_minor:
+          type: integer
+          format: int64
+        cancellation_policy:
+          type: string
+        refund_minor:
+          type: integer
+          format: int64
         hold_expires_at:
           type: string
           format: date-time
-          description: |
-            While held, the deadline to pay (nightly) or for the host to respond
-            (term). While approved, the deadline to pay.
-        created_at: { type: string, format: date-time }
+          description: 'While held, the deadline to pay (nightly) or for the host to respond
 
+            (term). While approved, the deadline to pay.
+
+            '
+        created_at:
+          type: string
+          format: date-time
     PaymentIntent:
       type: object
-      required: [authorization_url, reference, amount_minor, currency]
+      required:
+      - authorization_url
+      - reference
+      - amount_minor
+      - currency
       properties:
-        payment_id: { type: string }
-        reference: { type: string }
-        access_code: { type: string }
-        authorization_url: { type: string }
-        amount_minor: { type: integer, format: int64 }
-        currency: { type: string }
-        status: { type: string }
-
+        payment_id:
+          type: string
+        reference:
+          type: string
+        access_code:
+          type: string
+        authorization_url:
+          type: string
+        amount_minor:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        status:
+          type: string
     Night:
       type: object
-      required: [date, price_minor, available]
+      required:
+      - date
+      - price_minor
+      - available
       properties:
-        date: { type: string, format: date-time }
-        price_minor: { type: integer, format: int64 }
-        source: { type: string }
-        available: { type: boolean }
-
+        date:
+          type: string
+          format: date-time
+        price_minor:
+          type: integer
+          format: int64
+        source:
+          type: string
+        available:
+          type: boolean
     PayoutAccount:
       type: object
-      required: [id, channel, bank_code, account_number, account_name, verified]
+      required:
+      - id
+      - channel
+      - bank_code
+      - account_number
+      - account_name
+      - verified
       properties:
-        id: { type: string }
-        channel: { type: string }
+        id:
+          type: string
+        channel:
+          type: string
         bank_code:
           type: string
           description: MTN, VOD (Telecel Cash) or ATL (AT Money).
-        account_number: { type: string }
-        account_name: { type: string }
-        verified: { type: boolean }
-
+        account_number:
+          type: string
+        account_name:
+          type: string
+        verified:
+          type: boolean
     Balance:
       type: object
-      required: [currency, total_minor, available_minor, pending_minor, in_flight_minor, withdrawable_minor]
+      required:
+      - currency
+      - total_minor
+      - available_minor
+      - pending_minor
+      - in_flight_minor
+      - withdrawable_minor
       properties:
-        currency: { type: string }
-        total_minor: { type: integer, format: int64 }
-        available_minor: { type: integer, format: int64 }
+        currency:
+          type: string
+        total_minor:
+          type: integer
+          format: int64
+        available_minor:
+          type: integer
+          format: int64
         pending_minor:
           type: integer
           format: int64
           description: Paid by guests and held until they move in.
-        in_flight_minor: { type: integer, format: int64 }
-        withdrawable_minor: { type: integer, format: int64 }
-
+        in_flight_minor:
+          type: integer
+          format: int64
+        withdrawable_minor:
+          type: integer
+          format: int64
     Payout:
       type: object
-      required: [id, reference, status, currency, amount_minor, created_at]
+      required:
+      - id
+      - reference
+      - status
+      - currency
+      - amount_minor
+      - created_at
       properties:
-        id: { type: string }
-        reference: { type: string }
-        status: { type: string }
-        currency: { type: string }
-        amount_minor: { type: integer, format: int64 }
-        failure_reason: { type: string }
-        settled_at: { type: [string, "null"], format: date-time }
-        created_at: { type: string, format: date-time }
-
+        id:
+          type: string
+        reference:
+          type: string
+        status:
+          type: string
+        currency:
+          type: string
+        amount_minor:
+          type: integer
+          format: int64
+        failure_reason:
+          type: string
+        settled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
     Message:
       type: object
-      required: [id, sender_id, body, redacted, created_at]
+      required:
+      - id
+      - sender_id
+      - body
+      - redacted
+      - created_at
       properties:
-        id: { type: string }
-        sender_id: { type: string }
-        body: { type: string }
+        id:
+          type: string
+        sender_id:
+          type: string
+        body:
+          type: string
         redacted:
           type: boolean
           description: Contact details were removed because no booking is paid yet.
-        created_at: { type: string, format: date-time }
-
+        created_at:
+          type: string
+          format: date-time
     ThreadHeader:
       type: object
-      required: [id, role]
+      required:
+      - id
+      - role
       properties:
-        id: { type: string }
-        role: { type: string, enum: [guest, host] }
+        id:
+          type: string
+        role:
+          type: string
+          enum:
+          - guest
+          - host
         space:
           type: object
-          required: [slug, title]
+          required:
+          - slug
+          - title
           properties:
-            slug: { type: string }
-            title: { type: string }
+            slug:
+              type: string
+            title:
+              type: string
         with:
           type: object
           description: The other person in the conversation.
-          required: [display_name]
+          required:
+          - display_name
           properties:
-            display_name: { type: string }
-
+            display_name:
+              type: string
     ThreadSummary:
       type: object
-      required: [id, space_id, role, unread]
+      required:
+      - id
+      - space_id
+      - role
+      - unread
       properties:
-        id: { type: string }
-        space_id: { type: string }
-        role: { type: string, enum: [guest, host] }
-        unread: { type: boolean }
-        last_message_at: { type: [string, "null"], format: date-time }
+        id:
+          type: string
+        space_id:
+          type: string
+        role:
+          type: string
+          enum:
+          - guest
+          - host
+        unread:
+          type: boolean
+        last_message_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
         last_message:
           type: string
           description: A preview of the newest message, as stored, so already redacted.
         space:
           type: object
-          required: [slug, title]
+          required:
+          - slug
+          - title
           properties:
-            slug: { type: string }
-            title: { type: string }
+            slug:
+              type: string
+            title:
+              type: string
         with:
           type: object
-          required: [display_name]
+          required:
+          - display_name
           properties:
-            display_name: { type: string }
-
+            display_name:
+              type: string
     Notification:
       type: object
-      required: [id, event, title, body, read, created_at]
+      required:
+      - id
+      - event
+      - title
+      - body
+      - read
+      - created_at
       properties:
-        id: { type: string }
-        event: { type: string }
-        title: { type: string }
-        body: { type: string }
+        id:
+          type: string
+        event:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
         data:
           type: object
           additionalProperties: true
-        read: { type: boolean }
-        created_at: { type: string, format: date-time }
-
+        read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+    PatchListing:
+      type: object
+      additionalProperties: false
+      description: Updates only drafts or listings in review. Editing returns the listing to draft; withdraw a published
+        listing before editing. Attributes are a complete replacement document.
+      properties:
+        rental_mode:
+          type: string
+          enum:
+          - nightly
+          - term
+          - flexible
+        title:
+          type: string
+          minLength: 8
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 5000
+        base_price_minor:
+          type: integer
+          format: int64
+          minimum: 1
+        price_period:
+          type: string
+          enum:
+          - night
+          - week
+          - month
+          - year
+          - hour
+          - day
+          - semester
+          - academic_year
+        deposit_minor:
+          type: integer
+          format: int64
+          minimum: 0
+        advance_months:
+          type: integer
+          minimum: 0
+          maximum: 6
+        max_occupancy:
+          type: integer
+          minimum: 1
+          maximum: 500
+        amenities:
+          type: array
+          items:
+            type: string
+        attributes:
+          type: object
+          additionalProperties: true
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        locality:
+          type: string
+        region:
+          type: string
+        landmark:
+          type: string
+        digital_address:
+          type: string
   responses:
     Problem:
       description: RFC 9457 problem document
       content:
         application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
-
+          schema:
+            $ref: '#/components/schemas/Problem'
 paths:
   /healthz:
     get:
@@ -595,35 +1187,38 @@ paths:
       description: The process is running. Says nothing about its dependencies.
       operationId: getHealth
       responses:
-        "200":
+        '200':
           description: Alive
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Health" }
-
+              schema:
+                $ref: '#/components/schemas/Health'
   /readyz:
     get:
       summary: Readiness
       description: The process can serve traffic, including reaching its database.
       operationId: getReadiness
       responses:
-        "200":
+        '200':
           description: Ready
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Readiness" }
-        "503":
+              schema:
+                $ref: '#/components/schemas/Readiness'
+        '503':
           description: Not ready
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Readiness" }
-
+              schema:
+                $ref: '#/components/schemas/Readiness'
   /v1/auth/otp:
     post:
       summary: Send a one-time code by SMS
-      description: |
-        Never reveals whether an account exists; users are created on first
+      description: 'Never reveals whether an account exists; users are created on first
+
         successful verification. Rate limited per phone and per client IP.
+
+        '
       operationId: requestOTP
       requestBody:
         required: true
@@ -632,21 +1227,25 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [phone]
+              required:
+              - phone
               properties:
                 phone:
                   type: string
                   description: Any common Ghanaian format; normalised to E.164.
       responses:
-        "202":
+        '202':
           description: Code sent
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/OTPSent" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-        "429": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/OTPSent'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
   /v1/auth/verify:
     post:
       summary: Exchange a code for a session
@@ -658,44 +1257,59 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [phone, code]
+              required:
+              - phone
+              - code
               properties:
-                phone: { type: string }
-                code: { type: string }
+                phone:
+                  type: string
+                code:
+                  type: string
       responses:
-        "200":
+        '200':
           description: Signed in
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/TokenResponse" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-        "429": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
   /v1/auth/refresh:
     post:
       summary: Rotate a refresh token
-      description: |
-        Every refresh issues a new refresh token and retires the old one.
+      description: 'Every refresh issues a new refresh token and retires the old one.
+
         Replaying a retired token after the grace window revokes the whole
+
         session family, on the assumption that it was stolen.
+
+        '
       operationId: refreshSession
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/RefreshRequest" }
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
       responses:
-        "200":
+        '200':
           description: Rotated
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/TokenResponse" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
   /v1/auth/logout:
     post:
       summary: Revoke a session family
@@ -704,18 +1318,20 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/RefreshRequest" }
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
       responses:
-        "204": { description: Signed out }
-        "400": { $ref: "#/components/responses/Problem" }
-
+        '204':
+          description: Signed out
+        '400':
+          $ref: '#/components/responses/Problem'
   /v1/me:
     patch:
       summary: Update the signed-in user's display name
       description: Names are shown to the other party before booking, so contact details are refused.
       operationId: patchMe
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -723,322 +1339,503 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [display_name]
+              required:
+              - display_name
               properties:
-                display_name: { type: string, minLength: 2, maxLength: 60 }
+                display_name:
+                  type: string
+                  minLength: 2
+                  maxLength: 60
       responses:
-        "200":
+        '200':
           description: Updated
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/User" }
-        "422": { $ref: "#/components/responses/Problem" }
+              schema:
+                $ref: '#/components/schemas/User'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
     get:
       summary: The signed-in user
       operationId: getMe
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       responses:
-        "200":
+        '200':
           description: The user
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/User" }
-        "401": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/search:
     get:
       summary: Search published listings
-      description: |
-        Keyset paginated. Pass next_cursor back as cursor to continue; a new
+      description: 'Keyset paginated. Pass next_cursor back as cursor to continue; a new
+
         filter means starting again without one.
+
+        '
       operationId: search
       parameters:
-        - { name: q, in: query, schema: { type: string, maxLength: 80 } }
-        - name: type
-          in: query
-          description: |
-            One space type, or several joined by commas. Never repeated: the
-            API reads this parameter once, so type=a&type=b keeps only a.
-          schema: { type: string }
-        - name: mode
-          in: query
-          schema: { type: string, enum: [nightly, term] }
-        - name: max_price
-          in: query
-          description: Minor units.
-          schema: { type: integer, format: int64, minimum: 1 }
-        - name: sort
-          in: query
-          schema: { type: string, enum: [relevance, price_asc, price_desc, distance, newest] }
-        - { name: cursor, in: query, schema: { type: string } }
-        - name: limit
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 50 }
+      - name: q
+        in: query
+        schema:
+          type: string
+          maxLength: 80
+      - name: type
+        in: query
+        description: 'One space type, or several joined by commas. Never repeated: the
+
+          API reads this parameter once, so type=a&type=b keeps only a.
+
+          '
+        schema:
+          type: string
+      - name: mode
+        in: query
+        schema:
+          type: string
+          enum: *id001
+      - name: max_price
+        in: query
+        description: Minor units.
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+      - name: sort
+        in: query
+        schema:
+          type: string
+          enum:
+          - relevance
+          - price_asc
+          - price_desc
+          - distance
+          - newest
+      - name: cursor
+        in: query
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+      - name: price_period
+        in: query
+        description: Filter to the same advertised rate period before comparing prices.
+        schema:
+          type: string
+          enum: *id002
       responses:
-        "200":
+        '200':
           description: A page of results
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/SearchPage" }
-        "422": { $ref: "#/components/responses/Problem" }
-        "429": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/SearchPage'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
   /v1/listings/{slug}:
     get:
       summary: A published listing, as any visitor may see it
       operationId: getListing
       parameters:
-        - { name: slug, in: path, required: true, schema: { type: string } }
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: The listing
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/PublicListing" }
-        "404": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/PublicListing'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/listings/{slug}/media:
     get:
       summary: Ready photos, in the host's order
       operationId: getListingMedia
       parameters:
-        - { name: slug, in: path, required: true, schema: { type: string } }
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: Photos
           content:
             application/json:
               schema:
                 type: object
-                required: [media]
+                required:
+                - media
                 properties:
                   media:
                     type: array
-                    items: { $ref: "#/components/schemas/Media" }
-        "404": { $ref: "#/components/responses/Problem" }
-
+                    items:
+                      $ref: '#/components/schemas/Media'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/listings/{slug}/walks:
     get:
       summary: Walking times to the nearest landmarks
       operationId: getListingWalks
       parameters:
-        - { name: slug, in: path, required: true, schema: { type: string } }
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: Up to three walks, nearest first. Empty until the listing is routed.
           content:
             application/json:
               schema:
                 type: object
-                required: [walks]
+                required:
+                - walks
                 properties:
                   walks:
                     type: array
-                    items: { $ref: "#/components/schemas/Walk" }
-        "404": { $ref: "#/components/responses/Problem" }
-
+                    items:
+                      $ref: '#/components/schemas/Walk'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/listings/{slug}/video:
     get:
       summary: The walkthrough video, if one is ready
       operationId: getListingVideo
       parameters:
-        - { name: slug, in: path, required: true, schema: { type: string } }
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: A ready walkthrough
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Video" }
-        "404":
+              schema:
+                $ref: '#/components/schemas/Video'
+        '404':
           description: No ready walkthrough. Not an error for a visitor; just no badge.
-
   /v1/listings/{slug}/reviews:
     get:
       summary: Published guest reviews
       operationId: getListingReviews
       parameters:
-        - { name: slug, in: path, required: true, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
       responses:
-        "200":
+        '200':
           description: Summary and the most recent reviews
           content:
             application/json:
               schema:
                 type: object
-                required: [summary, reviews]
+                required:
+                - summary
+                - reviews
                 properties:
-                  summary: { $ref: "#/components/schemas/ReviewSummary" }
+                  summary:
+                    $ref: '#/components/schemas/ReviewSummary'
                   reviews:
                     type: array
                     items:
                       type: object
-                      required: [rating, body]
+                      required:
+                      - rating
+                      - body
                       properties:
-                        rating: { type: integer }
-                        body: { type: string }
-                        published_at: { type: string, format: date-time }
-        "404": { $ref: "#/components/responses/Problem" }
-
+                        rating:
+                          type: integer
+                        body:
+                          type: string
+                        published_at:
+                          type: string
+                          format: date-time
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/listings/{slug}/quote:
     get:
       summary: Price a stay or a lease
-      description: |
-        Term listings need starts_on and months. Nightly listings need check_in
+      description: 'Term listings need starts_on and months. Nightly listings need check_in
+
         and check_out. Dates are YYYY-MM-DD.
+
+        '
       operationId: getListingQuote
       parameters:
-        - { name: slug, in: path, required: true, schema: { type: string } }
-        - { name: starts_on, in: query, schema: { type: string, format: date } }
-        - { name: months, in: query, schema: { type: integer, minimum: 1 } }
-        - { name: check_in, in: query, schema: { type: string, format: date } }
-        - { name: check_out, in: query, schema: { type: string, format: date } }
-        - { name: guests, in: query, schema: { type: integer, minimum: 1 } }
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: starts_on
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: months
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+      - name: check_in
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: check_out
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: guests
+        in: query
+        schema:
+          type: integer
+          minimum: 1
       responses:
-        "200":
+        '200':
           description: The quote
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Quote" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
   /v1/space-types:
     get:
       summary: Every space type, its fields and their labels
       description: The one source of truth for attribute labels. Clients never duplicate them.
       operationId: getSpaceTypes
       responses:
-        "200":
+        '200':
           description: Schemas
           content:
             application/json:
               schema:
                 type: object
-                required: [types]
+                required:
+                - types
                 properties:
                   types:
                     type: array
-                    items: { $ref: "#/components/schemas/TypeSchema" }
-
+                    items:
+                      $ref: '#/components/schemas/TypeSchema'
   /v1/spaces:
     get:
       summary: The signed-in host's own listings, every status
       operationId: listOwnListings
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
-        - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          minimum: 0
       responses:
-        "200":
+        '200':
           description: Listings, newest first
           content:
             application/json:
               schema:
                 type: object
-                required: [spaces]
+                required:
+                - spaces
                 properties:
                   spaces:
                     type: array
-                    items: { $ref: "#/components/schemas/HostListing" }
-        "401": { $ref: "#/components/responses/Problem" }
+                    items:
+                      $ref: '#/components/schemas/HostListing'
+        '401':
+          $ref: '#/components/responses/Problem'
     post:
       summary: Create a draft listing
       description: Grants the host role on first use. The listing starts as a draft.
       operationId: createListing
       security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/CreateListing" }
-      responses:
-        "201":
-          description: Created as a draft
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/HostListing" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-
-  /v1/spaces/{id}:
-    patch:
-      summary: Update a listing the caller owns
-      operationId: patchListing
-      security:
-        - bearerAuth: []
-      parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                attributes:
-                  type: object
-                  additionalProperties: true
-                  description: The whole attribute document. Validated as a whole, never merged.
+              $ref: '#/components/schemas/CreateListing'
       responses:
-        "200":
+        '201':
+          description: Created as a draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostListing'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /v1/spaces/{id}:
+    patch:
+      summary: Update a listing the caller owns
+      operationId: patchListing
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchListing'
+      responses:
+        '200':
           description: Updated
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/HostListing" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/HostListing'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '409': &id003
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+    get:
+      summary: Fetch the caller’s own listing
+      operationId: getOwnListing
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema: &id004
+                $ref: '#/components/schemas/HostListing'
+        '401': *id003
+        '404': *id003
+        '409': *id003
+        '422': *id003
   /v1/spaces/{id}/submit:
     post:
       summary: Send a draft for review
       description: Needs at least one ready photo, a locality and a price. An admin then publishes it.
       operationId: submitListing
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: Now in review
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/HostListing" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/HostListing'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/spaces/{id}/media:
     get:
       summary: The listing's ready photos
       operationId: listOwnMedia
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: Ready photos only; ones still processing are not listed
           content:
             application/json:
               schema:
                 type: object
-                required: [media]
+                required:
+                - media
                 properties:
                   media:
                     type: array
-                    items: { $ref: "#/components/schemas/Media" }
+                    items:
+                      $ref: '#/components/schemas/Media'
+        '401':
+          $ref: '#/components/responses/Problem'
     post:
       summary: Reserve a photo slot and get a presigned upload URL
       operationId: requestUpload
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       requestBody:
         required: true
         content:
@@ -1046,93 +1843,149 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [content_type]
+              required:
+              - content_type
               properties:
-                content_type: { type: string, enum: [image/jpeg, image/png] }
+                content_type:
+                  type: string
+                  enum:
+                  - image/jpeg
+                  - image/png
       responses:
-        "201":
+        '201':
           description: Upload the bytes to upload_url with exactly these headers
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/UploadTicket" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/UploadTicket'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/spaces/{id}/media/{mediaId}/confirm:
     post:
       summary: Tell the API an upload finished
       description: Verifies the object exists, then queues processing. Returns while the photo is still pending.
       operationId: confirmUpload
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: mediaId, in: path, required: true, schema: { type: string } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: mediaId
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: Queued
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Media" }
-        "409": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/Media'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/listings/{slug}/calendar:
     get:
       summary: Nightly availability and prices
       operationId: getListingCalendar
       parameters:
-        - { name: slug, in: path, required: true, schema: { type: string } }
-        - { name: from, in: query, schema: { type: string, format: date } }
-        - { name: to, in: query, schema: { type: string, format: date } }
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date
       responses:
-        "200":
+        '200':
           description: One entry per night
           content:
             application/json:
               schema:
                 type: object
-                required: [currency, nights]
+                required:
+                - currency
+                - nights
                 properties:
-                  currency: { type: string }
+                  currency:
+                    type: string
                   nights:
                     type: array
-                    items: { $ref: "#/components/schemas/Night" }
-        "404": { $ref: "#/components/responses/Problem" }
-
+                    items:
+                      $ref: '#/components/schemas/Night'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/bookings:
     get:
       summary: The caller's bookings as a guest, or as a host with role=host
       operationId: listBookings
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: role, in: query, schema: { type: string, enum: [guest, host] } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      - name: role
+        in: query
+        schema:
+          type: string
+          enum:
+          - guest
+          - host
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
       responses:
-        "200":
+        '200':
           description: Bookings, newest first
           content:
             application/json:
               schema:
                 type: object
-                required: [bookings]
+                required:
+                - bookings
                 properties:
                   bookings:
                     type: array
-                    items: { $ref: "#/components/schemas/Booking" }
+                    items:
+                      $ref: '#/components/schemas/Booking'
+        '401':
+          $ref: '#/components/responses/Problem'
     post:
       summary: Hold dates, or request a lease
-      description: |
-        Nightly bookings are held for payment. Term bookings are requests the
+      description: 'Nightly bookings are held for payment. Term bookings are requests the
+
         host approves before anything is paid. Priced on the server, always.
+
+        '
       operationId: createBooking
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - name: Idempotency-Key
-          in: header
-          description: Retrying with the same key returns the original booking instead of a second one.
-          schema: { type: string, maxLength: 100 }
+      - name: Idempotency-Key
+        in: header
+        description: Retrying with the same key returns the original booking instead of a second one.
+        schema:
+          type: string
+          maxLength: 100
       requestBody:
         required: true
         content:
@@ -1140,83 +1993,132 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [space_id]
+              required:
+              - space_id
               properties:
-                space_id: { type: string, format: uuid }
-                check_in: { type: string, format: date }
-                check_out: { type: string, format: date }
-                starts_on: { type: string, format: date }
-                months: { type: integer, minimum: 1 }
-                guests: { type: integer, minimum: 1 }
+                space_id:
+                  type: string
+                  format: uuid
+                check_in:
+                  type: string
+                  format: date
+                check_out:
+                  type: string
+                  format: date
+                starts_on:
+                  type: string
+                  format: date
+                months:
+                  type: integer
+                  minimum: 1
+                guests:
+                  type: integer
+                  minimum: 1
       responses:
-        "201":
+        '201':
           description: Held
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Booking" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/bookings/{id}:
     get:
       summary: One booking, for its guest or host
       operationId: getBooking
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: The booking
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Booking" }
-        "404": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/bookings/{id}/pay:
     post:
       summary: Start, or resume, payment for a payable booking
       description: Payable means held for nightly, approved for term. Returns the open attempt if one exists.
       operationId: payBooking
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "201":
+        '201':
           description: Send the guest to authorization_url
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/PaymentIntent" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/PaymentIntent'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/bookings/{id}/approve:
     post:
       summary: The host approves a lease request, which starts the guest's payment window
       operationId: approveBooking
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: Approved
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Booking" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/bookings/{id}/decline:
     post:
       summary: The host declines a request
       operationId: declineBooking
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       requestBody:
         required: true
         content:
@@ -1225,34 +2127,44 @@ paths:
               type: object
               additionalProperties: false
               properties:
-                reason: { type: string, maxLength: 200 }
+                reason:
+                  type: string
+                  maxLength: 200
       responses:
-        "200":
+        '200':
           description: Declined
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Booking" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/payouts/account:
     get:
       summary: The host's payout account, if one is saved
       operationId: getPayoutAccount
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       responses:
-        "200":
+        '200':
           description: The account
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/PayoutAccount" }
-        "404": { $ref: "#/components/responses/Problem" }
+              schema:
+                $ref: '#/components/schemas/PayoutAccount'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
     put:
       summary: Save the host's mobile money payout account
       operationId: savePayoutAccount
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -1260,57 +2172,78 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [bank_code, account_number, account_name]
+              required:
+              - bank_code
+              - account_number
+              - account_name
               properties:
-                channel: { type: string }
-                bank_code: { type: string, enum: [MTN, VOD, ATL] }
-                account_number: { type: string }
-                account_name: { type: string }
+                channel:
+                  type: string
+                bank_code:
+                  type: string
+                  enum:
+                  - MTN
+                  - VOD
+                  - ATL
+                account_number:
+                  type: string
+                account_name:
+                  type: string
       responses:
-        "200":
+        '200':
           description: Saved
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/PayoutAccount" }
-        "422": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/PayoutAccount'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/payouts/balance:
     get:
       summary: What the host has earned, held and can withdraw
       operationId: getBalance
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       responses:
-        "200":
+        '200':
           description: The balance
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Balance" }
-        "403": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/Balance'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/payouts:
     get:
       summary: The host's payouts, newest first
       operationId: listPayouts
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       responses:
-        "200":
+        '200':
           description: Payouts
           content:
             application/json:
               schema:
                 type: object
-                required: [payouts]
+                required:
+                - payouts
                 properties:
                   payouts:
                     type: array
-                    items: { $ref: "#/components/schemas/Payout" }
+                    items:
+                      $ref: '#/components/schemas/Payout'
+        '401':
+          $ref: '#/components/responses/Problem'
     post:
       summary: Withdraw to the saved account
       operationId: requestPayout
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -1318,26 +2251,39 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [amount_minor]
+              required:
+              - amount_minor
               properties:
-                amount_minor: { type: integer, format: int64, minimum: 100 }
+                amount_minor:
+                  type: integer
+                  format: int64
+                  minimum: 100
       responses:
-        "202":
+        '202':
           description: Accepted; the transfer settles asynchronously
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Payout" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/Payout'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/spaces/{id}/messages:
     post:
       summary: Message a listing's host; opens the conversation or continues it
       operationId: messageHost
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       requestBody:
         required: true
         content:
@@ -1345,76 +2291,119 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [body]
+              required:
+              - body
               properties:
-                body: { type: string, maxLength: 4000 }
+                body:
+                  type: string
+                  maxLength: 4000
       responses:
-        "201":
+        '201':
           description: Sent
           content:
             application/json:
               schema:
                 type: object
-                required: [thread_id, message]
+                required:
+                - thread_id
+                - message
                 properties:
-                  thread_id: { type: string }
-                  message: { $ref: "#/components/schemas/Message" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-
+                  thread_id:
+                    type: string
+                  message:
+                    $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/threads:
     get:
       summary: The caller's conversations, most recent first
       operationId: listThreads
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
       responses:
-        "200":
+        '200':
           description: Conversations
           content:
             application/json:
               schema:
                 type: object
-                required: [threads]
+                required:
+                - threads
                 properties:
                   threads:
                     type: array
-                    items: { $ref: "#/components/schemas/ThreadSummary" }
-
+                    items:
+                      $ref: '#/components/schemas/ThreadSummary'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/threads/{id}/messages:
     get:
       summary: A page of messages, newest first
       operationId: listMessages
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: before, in: query, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: before
+        in: query
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
       responses:
-        "200":
+        '200':
           description: Messages, newest first
           content:
             application/json:
               schema:
                 type: object
-                required: [messages]
+                required:
+                - messages
                 properties:
-                  thread: { $ref: "#/components/schemas/ThreadHeader" }
+                  thread:
+                    $ref: '#/components/schemas/ThreadHeader'
                   messages:
                     type: array
-                    items: { $ref: "#/components/schemas/Message" }
-                  next_before: { type: string }
-        "404": { $ref: "#/components/responses/Problem" }
+                    items:
+                      $ref: '#/components/schemas/Message'
+                  next_before:
+                    type: string
+        '404':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
     post:
       summary: Reply in a conversation
       operationId: replyThread
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       requestBody:
         required: true
         content:
@@ -1422,107 +2411,280 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [body]
+              required:
+              - body
               properties:
-                body: { type: string, maxLength: 4000 }
+                body:
+                  type: string
+                  maxLength: 4000
       responses:
-        "201":
+        '201':
           description: Sent
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Message" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/threads/{id}/read:
     post:
       summary: Mark a conversation read up to now
       operationId: readThread
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "204": { description: Marked }
-        "404": { $ref: "#/components/responses/Problem" }
-
+        '204':
+          description: Marked
+        '404':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/notifications:
     get:
       summary: The caller's notifications, newest first, with the unread count
       operationId: listNotifications
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: before, in: query, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      - name: before
+        in: query
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
       responses:
-        "200":
+        '200':
           description: Notifications
           content:
             application/json:
               schema:
                 type: object
-                required: [notifications, unread]
+                required:
+                - notifications
+                - unread
                 properties:
                   notifications:
                     type: array
-                    items: { $ref: "#/components/schemas/Notification" }
-                  unread: { type: integer }
-                  next_before: { type: string }
-
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  unread:
+                    type: integer
+                  next_before:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/notifications/{id}/read:
     post:
       summary: Mark one notification read
       operationId: readNotification
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "204": { description: Marked }
-        "404": { $ref: "#/components/responses/Problem" }
-
+        '204':
+          description: Marked
+        '404':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/notifications/read-all:
     post:
       summary: Mark every notification read
       operationId: readAllNotifications
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       responses:
-        "200":
+        '200':
           description: Marked
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  marked: { type: integer }
-
+                  marked:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/spaces/{id}/contact:
     get:
       summary: The owner's name and phone number, for a signed-in renter
-      description: |
-        Only published listings. Every reveal is recorded against the viewer's
+      description: 'Only published listings. Every reveal is recorded against the viewer''s
+
         verified account, and each account may reveal a limited number of
+
         numbers a day, so the directory of hosts cannot be scraped.
+
+        '
       operationId: revealContact
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: The owner's contact
           content:
             application/json:
               schema:
                 type: object
-                required: [display_name, phone]
+                required:
+                - display_name
+                - phone
                 properties:
-                  display_name: { type: string }
+                  display_name:
+                    type: string
                   phone:
                     type: string
                     description: E.164, for example +233244123456.
-        "401": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "429": { $ref: "#/components/responses/Problem" }
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+  /v1/spaces/{id}/withdraw:
+    post:
+      summary: Withdraw a listing owned by the caller
+      operationId: withdrawListing
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema: *id004
+        '401': *id003
+        '404': *id003
+        '409': *id003
+        '422': *id003
+  /v1/spaces/{id}/archive:
+    post:
+      summary: Archive a listing owned by the caller
+      operationId: archiveListing
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema: *id004
+        '401': *id003
+        '404': *id003
+        '409': *id003
+        '422': *id003
+  /v1/spaces/{id}/media/order:
+    put:
+      summary: Set ready photos in the exact supplied order; first is cover
+      operationId: reorderMedia
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - media
+                properties:
+                  media:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Media'
+        '401': *id003
+        '404': *id003
+        '409': *id003
+        '422': *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - ids
+              properties:
+                ids:
+                  type: array
+                  uniqueItems: true
+                  items:
+                    type: string
+                    format: uuid
+  /v1/spaces/{id}/media/{mediaId}:
+    delete:
+      summary: Remove a photo; keep at least one ready photo on a published listing
+      operationId: deleteMedia
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: mediaId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Success
+        '401': *id003
+        '404': *id003
+        '409': *id003
+        '422': *id003
+security: []

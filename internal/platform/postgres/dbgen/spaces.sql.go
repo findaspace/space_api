@@ -409,27 +409,32 @@ func (q *Queries) SpaceSummaries(ctx context.Context, ids []uuid.UUID) ([]SpaceS
 
 const updateSpace = `-- name: UpdateSpace :one
 UPDATE spaces SET
-    title            = COALESCE($1, title),
-    description      = COALESCE($2, description),
-    base_price_minor = COALESCE($3, base_price_minor),
-    deposit_minor    = COALESCE($4, deposit_minor),
-    advance_months   = COALESCE($5, advance_months),
-    max_occupancy    = COALESCE($6, max_occupancy),
-    latitude         = COALESCE($7, latitude),
-    longitude        = COALESCE($8, longitude),
-    locality         = COALESCE($9, locality),
-    region           = COALESCE($10, region),
-    landmark         = COALESCE($11, landmark),
-    digital_address  = COALESCE($12, digital_address),
-    amenities        = COALESCE($13::text[], amenities),
-    attributes       = COALESCE($14::jsonb, attributes)
-WHERE id = $15
-  AND host_id = $16
+    status = 'draft',
+    rental_mode      = COALESCE($1, rental_mode),
+    price_period     = COALESCE($2, price_period),
+    title            = COALESCE($3, title),
+    description      = COALESCE($4, description),
+    base_price_minor = COALESCE($5, base_price_minor),
+    deposit_minor    = COALESCE($6, deposit_minor),
+    advance_months   = COALESCE($7, advance_months),
+    max_occupancy    = COALESCE($8, max_occupancy),
+    latitude         = COALESCE($9, latitude),
+    longitude        = COALESCE($10, longitude),
+    locality         = COALESCE($11, locality),
+    region           = COALESCE($12, region),
+    landmark         = COALESCE($13, landmark),
+    digital_address  = COALESCE($14, digital_address),
+    amenities        = COALESCE($15::text[], amenities),
+    attributes       = COALESCE($16::jsonb, attributes)
+WHERE id = $17
+  AND host_id = $18
   AND status IN ('draft', 'in_review')
 RETURNING id, host_id, slug, space_type, rental_mode, status, title, description, base_price_minor, currency, price_period, deposit_minor, advance_months, max_occupancy, latitude, longitude, locality, region, country, landmark, digital_address, amenities, attributes, published_at, created_at, updated_at, review_count, rating_sum, photo_count, completeness
 `
 
 type UpdateSpaceParams struct {
+	RentalMode     *RentalMode
+	PricePeriod    *PricePeriod
 	Title          *string
 	Description    *string
 	BasePriceMinor *int64
@@ -450,6 +455,8 @@ type UpdateSpaceParams struct {
 
 func (q *Queries) UpdateSpace(ctx context.Context, arg UpdateSpaceParams) (Space, error) {
 	row := q.db.QueryRow(ctx, updateSpace,
+		arg.RentalMode,
+		arg.PricePeriod,
 		arg.Title,
 		arg.Description,
 		arg.BasePriceMinor,

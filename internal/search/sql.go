@@ -21,6 +21,9 @@ func build(q Query) (string, []any) {
 
 	where := []string{"s.status = 'published'"}
 
+	if q.Period != "" {
+		where = append(where, "s.price_period = "+b.arg(q.Period)+"::price_period")
+	}
 	if q.Mode != "" {
 		where = append(where, "s.rental_mode = "+b.arg(q.Mode)+"::rental_mode")
 	}

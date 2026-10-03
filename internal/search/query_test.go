@@ -36,7 +36,7 @@ func TestNoUserInputReachesTheSQL(t *testing.T) {
 		Text:       "'; DROP TABLE spaces; --",
 		Locality:   "East Legon'); DELETE FROM users; --",
 		Types:      []string{"apartment'; --"},
-		Mode:       "nightly' OR '1'='1",
+		Mode:       "nightly",
 		Amenities:  []string{"wifi'); --"},
 		Attributes: map[string]any{"bedrooms": 2},
 	}
@@ -148,6 +148,22 @@ func TestCursorDirectionMatchesSort(t *testing.T) {
 		want := "(q." + spec.expr + ", q.id) " + op
 		if !strings.Contains(sql, want) {
 			t.Errorf("%s: expected %q in the cursor clause", sort, want)
+		}
+	}
+}
+
+func TestPricePeriodAndInvalidMode(t *testing.T) {
+	q := Query{Mode: "flexible", Period: "hour"}
+	if err := q.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	sql, args := build(q)
+	if !strings.Contains(sql, "s.price_period = $1::price_period") || len(args) < 2 || args[0] != "hour" {
+		t.Fatalf("period filter missing: %s %v", sql, args)
+	}
+	for _, q := range []Query{{Mode: "nightly' OR true"}, {Period: "invented"}} {
+		if q.Normalize() != ErrBadFilter {
+			t.Fatal("invalid filter accepted")
 		}
 	}
 }

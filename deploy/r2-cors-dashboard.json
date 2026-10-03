@@ -1,0 +1,24 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://YOUR-FRONTEND-DOMAIN"
+    ],
+    "AllowedMethods": [
+      "PUT",
+      "GET",
+      "HEAD"
+    ],
+    "AllowedHeaders": [
+      "content-type",
+      "range",
+      "if-match"
+    ],
+    "ExposeHeaders": [
+      "ETag",
+      "Content-Range",
+      "Content-Length",
+      "Accept-Ranges"
+    ],
+    "MaxAgeSeconds": 3600
+  }
+]

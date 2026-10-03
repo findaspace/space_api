@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/samnart1/space_api/db"
-	"github.com/samnart1/space_api/internal/config"
 	"github.com/samnart1/space_api/internal/platform/postgres"
 
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
@@ -19,24 +18,28 @@ import (
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "migrate: %v\n", err)
+		os.Exit(1)
 	}
 }
 
 func run() error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
+	databaseURL := os.Getenv("SPACE_DATABASE_DIRECT_URL")
+	if databaseURL == "" {
+		databaseURL = os.Getenv("SPACE_DATABASE_URL")
+	}
+	if databaseURL == "" {
+		return fmt.Errorf("SPACE_DATABASE_URL is required")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	pool, err := postgres.NewPool(ctx, postgres.Config{
-		URL:          cfg.DatabaseUrl,
+		URL:          databaseURL,
 		MaxConns:     2,
 		MinConns:     1,
 		ConnLifetime: 5 * time.Minute,
-		PingTimeout:  cfg.DBPingTimeout,
+		PingTimeout:  30 * time.Second,
 	})
 	if err != nil {
 		return err

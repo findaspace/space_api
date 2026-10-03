@@ -30,43 +30,46 @@ func NewService(pool *pgxpool.Pool, dailyCap int) *Service {
 	return &Service{pool: pool, dailyCap: dailyCap}
 }
 
-// Reveal returns a published listing's owner, and records that this viewer
-// saw it. The count and the insert are not one transaction on purpose: a
-// viewer racing two requests could exceed the cap by one, which is harmless,
-// and the simpler query is worth more than that exactness.
+// Reveal serialises each viewer's cap check and records every successful reveal.
+// Reopening the same space does not consume another unique-space allowance.
 func (s *Service) Reveal(ctx context.Context, viewerID, spaceID uuid.UUID) (Contact, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Contact{}, err
+	}
+	defer tx.Rollback(ctx)
+	var locked uuid.UUID
+	if err = tx.QueryRow(ctx, "SELECT id FROM users WHERE id=$1 AND status='active' FOR UPDATE", viewerID).Scan(&locked); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Contact{}, ErrNotFound
+		}
+		return Contact{}, err
+	}
 	var hostID uuid.UUID
-	err := s.pool.QueryRow(ctx,
-		`SELECT host_id FROM spaces WHERE id = $1 AND status = 'published'`, spaceID).Scan(&hostID)
+	var c Contact
+	err = tx.QueryRow(ctx, "SELECT s.host_id,u.display_name,u.phone_e164 FROM spaces s JOIN users u ON u.id=s.host_id WHERE s.id=$1 AND s.status='published' AND u.status='active'", spaceID).Scan(&hostID, &c.DisplayName, &c.Phone)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Contact{}, ErrNotFound
 	}
 	if err != nil {
 		return Contact{}, fmt.Errorf("find listing: %w", err)
 	}
-
-	// An owner looking at their own listing costs nothing against the cap.
 	if hostID != viewerID {
 		var recent int
-		if err := s.pool.QueryRow(ctx,
-			`SELECT count(*) FROM contact_reveals WHERE viewer_id = $1 AND created_at > $2`,
-			viewerID, time.Now().Add(-24*time.Hour)).Scan(&recent); err != nil {
-			return Contact{}, fmt.Errorf("count reveals: %w", err)
+		var already bool
+		since := time.Now().Add(-24 * time.Hour)
+		if err = tx.QueryRow(ctx, "SELECT count(DISTINCT space_id),COALESCE(bool_or(space_id=$3),false) FROM contact_reveals WHERE viewer_id=$1 AND created_at>$2", viewerID, since, spaceID).Scan(&recent, &already); err != nil {
+			return Contact{}, err
 		}
-		if recent >= s.dailyCap {
+		if !already && recent >= s.dailyCap {
 			return Contact{}, ErrTooMany
 		}
-		if _, err := s.pool.Exec(ctx,
-			`INSERT INTO contact_reveals (viewer_id, space_id, host_id) VALUES ($1, $2, $3)`,
-			viewerID, spaceID, hostID); err != nil {
-			return Contact{}, fmt.Errorf("record reveal: %w", err)
+		if _, err = tx.Exec(ctx, "INSERT INTO contact_reveals(viewer_id,space_id,host_id) VALUES($1,$2,$3)", viewerID, spaceID, hostID); err != nil {
+			return Contact{}, err
 		}
 	}
-
-	var c Contact
-	if err := s.pool.QueryRow(ctx,
-		`SELECT display_name, phone_e164 FROM users WHERE id = $1`, hostID).Scan(&c.DisplayName, &c.Phone); err != nil {
-		return Contact{}, fmt.Errorf("load owner: %w", err)
+	if err = tx.Commit(ctx); err != nil {
+		return Contact{}, err
 	}
 	return c, nil
 }

@@ -186,6 +186,8 @@ func writeMediaError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, media.ErrNotFound), errors.Is(err, listing.ErrNotFound):
 		WriteProblem(w, r, Problem{Status: http.StatusNotFound, Title: "not found"})
 
+	case errors.Is(err, media.ErrLastPhoto):
+		WriteProblem(w, r, Problem{Status: http.StatusConflict, Title: "keep at least one photo", Detail: "Upload a replacement photo or withdraw the listing before deleting its last photo."})
 	case errors.Is(err, media.ErrTooMany):
 		WriteProblem(w, r, Problem{Status: http.StatusConflict, Title: "photo limit reached"})
 

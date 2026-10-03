@@ -12,8 +12,9 @@ type SpaceLookup interface {
 }
 
 type Service struct {
-	store  *Store
-	spaces SpaceLookup
+	store         *Store
+	spaces        SpaceLookup
+	directContact bool
 }
 
 func NewService(store *Store, spaces SpaceLookup) *Service {
@@ -23,6 +24,8 @@ func NewService(store *Store, spaces SpaceLookup) *Service {
 func (s *Service) LastMessages(ctx context.Context, threadIDs []uuid.UUID) (map[uuid.UUID]string, error) {
 	return s.store.LastMessages(ctx, threadIDs)
 }
+
+func (s *Service) WithDirectContact(enabled bool) *Service { s.directContact = enabled; return s }
 
 // Send posts a message as a guest opening or continuing a conversation about a
 // space. Hosts reply through Reply, which needs an existing thread.
@@ -61,7 +64,11 @@ func (s *Service) post(ctx context.Context, t Thread, senderID uuid.UUID, body s
 		return Message{}, ErrTooLong
 	}
 
-	confirmed, err := s.store.HasConfirmedBooking(ctx, t.SpaceID, t.GuestID)
+	confirmed := s.directContact
+	var err error
+	if !confirmed {
+		confirmed, err = s.store.HasConfirmedBooking(ctx, t.SpaceID, t.GuestID)
+	}
 	if err != nil {
 		return Message{}, err
 	}

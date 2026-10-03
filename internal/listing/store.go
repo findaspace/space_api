@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/samnart1/space_api/internal/platform/postgres"
 	"github.com/samnart1/space_api/internal/platform/postgres/dbgen"
 )
 
@@ -181,6 +182,8 @@ func (s *Store) ListForHost(ctx context.Context, hostID uuid.UUID, limit, offset
 }
 
 type Patch struct {
+	RentalMode     *RentalMode
+	PricePeriod    *PricePeriod
 	Title          *string
 	Description    *string
 	BasePriceMinor *int64
@@ -209,6 +212,8 @@ func (s *Store) Update(ctx context.Context, id, hostID uuid.UUID, p Patch) (Spac
 	row, err := s.q.UpdateSpace(ctx, dbgen.UpdateSpaceParams{
 		ID:             id,
 		HostID:         hostID,
+		RentalMode:     (*dbgen.RentalMode)(p.RentalMode),
+		PricePeriod:    (*dbgen.PricePeriod)(p.PricePeriod),
 		Title:          p.Title,
 		Description:    p.Description,
 		BasePriceMinor: p.BasePriceMinor,
@@ -237,10 +242,24 @@ func (s *Store) Update(ctx context.Context, id, hostID uuid.UUID, p Patch) (Spac
 // SetStatus applies a transition only if the row is still in the status the
 // caller read. Zero rows means somebody else moved it first.
 func (s *Store) SetStatus(ctx context.Context, id uuid.UUID, from, to Status) (Space, error) {
-	row, err := s.q.SetSpaceStatus(ctx, dbgen.SetSpaceStatusParams{
-		ID:             id,
-		NextStatus:     dbgen.SpaceStatus(to),
-		ExpectedStatus: dbgen.SpaceStatus(from),
+	var row dbgen.Space
+	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		if to == StatusPublished {
+			var locked uuid.UUID
+			if err := tx.QueryRow(ctx, "SELECT id FROM spaces WHERE id=$1 FOR UPDATE", id).Scan(&locked); err != nil {
+				return err
+			}
+			var count int
+			if err := tx.QueryRow(ctx, "SELECT count(*) FROM space_media WHERE space_id=$1 AND status='ready'", id).Scan(&count); err != nil {
+				return err
+			}
+			if count < 1 {
+				return ErrNotReady
+			}
+		}
+		var err error
+		row, err = s.q.WithTx(tx).SetSpaceStatus(ctx, dbgen.SetSpaceStatusParams{ID: id, NextStatus: dbgen.SpaceStatus(to), ExpectedStatus: dbgen.SpaceStatus(from)})
+		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Space{}, ErrConflict

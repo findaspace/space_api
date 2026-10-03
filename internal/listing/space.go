@@ -24,22 +24,31 @@ const (
 	TypeEventSpace     SpaceType = "event_space"
 	TypeLand           SpaceType = "land"
 	TypeParking        SpaceType = "parking"
+	TypeStudio         SpaceType = "studio"
+	TypeFootballPitch  SpaceType = "football_pitch"
+	TypeSportsCourt    SpaceType = "sports_court"
+	TypeSportsFacility SpaceType = "sports_facility"
 )
 
 type RentalMode string
 
 const (
-	ModeNightly RentalMode = "nightly"
-	ModeTerm    RentalMode = "term"
+	ModeNightly  RentalMode = "nightly"
+	ModeTerm     RentalMode = "term"
+	ModeFlexible RentalMode = "flexible"
 )
 
 type PricePeriod string
 
 const (
-	PeriodNight PricePeriod = "night"
-	PeriodWeek  PricePeriod = "week"
-	PeriodMonth PricePeriod = "month"
-	PeriodYear  PricePeriod = "year"
+	PeriodNight        PricePeriod = "night"
+	PeriodWeek         PricePeriod = "week"
+	PeriodMonth        PricePeriod = "month"
+	PeriodYear         PricePeriod = "year"
+	PeriodHour         PricePeriod = "hour"
+	PeriodDay          PricePeriod = "day"
+	PeriodSemester     PricePeriod = "semester"
+	PeriodAcademicYear PricePeriod = "academic_year"
 )
 
 type Status string

@@ -1,0 +1,64 @@
+# API repository Blueprint: one FREE web service containing API and worker.
+# Create a separate frontend service using space_web's render.yaml.
+services:
+  - type: web
+    name: findaspace-api-beta
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile.render-test
+    dockerContext: .
+    healthCheckPath: /ready
+    envVars:
+      - key: SPACE_ENV
+        value: production
+      - key: SPACE_WORKER_CONCURRENCY
+        value: "1"
+      - key: SPACE_DB_MAX_CONNS
+        value: "3"
+      - key: SPACE_DB_MIN_CONNS
+        value: "1"
+      - key: SPACE_DB_PING_TIMEOUT
+        value: 30s
+      - key: SPACE_DB_EXEC_MODE
+        value: exec
+      - key: SPACE_DATABASE_URL
+        sync: false
+      - key: SPACE_DATABASE_DIRECT_URL
+        sync: false
+      - key: SPACE_OTP_PEPPER
+        sync: false
+      - key: SPACE_JWT_SEED
+        sync: false
+      - key: SPACE_BFF_SECRET
+        sync: false
+      - key: SPACE_CORS_ORIGINS
+        sync: false
+      - key: SPACE_RATELIMIT_ENABLED
+        value: "true"
+      - key: SPACE_DIRECT_CONTACT
+        value: "true"
+      - key: SPACE_PAYMENTS_ENABLED
+        value: "false"
+      - key: SPACE_SMS_PROVIDER
+        value: arkesel
+      - key: SPACE_ARKESEL_SANDBOX
+        value: "false"
+      - key: SPACE_SMS_SENDER_ID
+        value: Findaspace
+      - key: SPACE_ARKESEL_API_KEY
+        sync: false
+      - key: SPACE_STORAGE_ENDPOINT
+        sync: false
+      - key: SPACE_STORAGE_REGION
+        value: auto
+      - key: SPACE_STORAGE_BUCKET
+        sync: false
+      - key: SPACE_STORAGE_ACCESS_KEY
+        sync: false
+      - key: SPACE_STORAGE_SECRET_KEY
+        sync: false
+      - key: SPACE_STORAGE_PATH_STYLE
+        value: "true"
+      - key: SPACE_STORAGE_PUBLIC_BASE_URL
+        sync: false

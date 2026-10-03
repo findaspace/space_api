@@ -31,6 +31,7 @@ const (
 var (
 	ErrBadCursor = errors.New("search: invalid cursor")
 	ErrBadSort   = errors.New("search: unknown sort")
+	ErrBadFilter = errors.New("search: invalid mode or price period")
 	ErrBadRange  = errors.New("search: check-out must be after check-in")
 )
 
@@ -78,6 +79,7 @@ func ParseCursor(raw string) (Cursor, error) {
 type Query struct {
 	Text       string
 	Types      []string
+	Period     string
 	Mode       string
 	Locality   string
 	MinPrice   *int64
@@ -102,6 +104,12 @@ type Query struct {
 // it, so the builder never has to defend against a negative limit or a radius
 // large enough to match the planet.
 func (q *Query) Normalize() error {
+	if q.Mode != "" && q.Mode != "nightly" && q.Mode != "term" && q.Mode != "flexible" {
+		return ErrBadFilter
+	}
+	if q.Period != "" && q.Period != "hour" && q.Period != "day" && q.Period != "night" && q.Period != "week" && q.Period != "month" && q.Period != "year" && q.Period != "semester" && q.Period != "academic_year" {
+		return ErrBadFilter
+	}
 	if q.Sort == "" {
 		q.Sort = SortRelevance
 	}

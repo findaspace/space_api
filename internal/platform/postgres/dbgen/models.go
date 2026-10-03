@@ -634,10 +634,14 @@ func (ns NullPayoutStatus) Value() (driver.Value, error) {
 type PricePeriod string
 
 const (
-	PricePeriodNight PricePeriod = "night"
-	PricePeriodWeek  PricePeriod = "week"
-	PricePeriodMonth PricePeriod = "month"
-	PricePeriodYear  PricePeriod = "year"
+	PricePeriodNight        PricePeriod = "night"
+	PricePeriodWeek         PricePeriod = "week"
+	PricePeriodMonth        PricePeriod = "month"
+	PricePeriodYear         PricePeriod = "year"
+	PricePeriodHour         PricePeriod = "hour"
+	PricePeriodDay          PricePeriod = "day"
+	PricePeriodSemester     PricePeriod = "semester"
+	PricePeriodAcademicYear PricePeriod = "academic_year"
 )
 
 func (e *PricePeriod) Scan(src interface{}) error {
@@ -678,8 +682,9 @@ func (ns NullPricePeriod) Value() (driver.Value, error) {
 type RentalMode string
 
 const (
-	RentalModeNightly RentalMode = "nightly"
-	RentalModeTerm    RentalMode = "term"
+	RentalModeNightly  RentalMode = "nightly"
+	RentalModeTerm     RentalMode = "term"
+	RentalModeFlexible RentalMode = "flexible"
 )
 
 func (e *RentalMode) Scan(src interface{}) error {
@@ -820,6 +825,10 @@ const (
 	SpaceTypeEventSpace     SpaceType = "event_space"
 	SpaceTypeLand           SpaceType = "land"
 	SpaceTypeParking        SpaceType = "parking"
+	SpaceTypeStudio         SpaceType = "studio"
+	SpaceTypeFootballPitch  SpaceType = "football_pitch"
+	SpaceTypeSportsCourt    SpaceType = "sports_court"
+	SpaceTypeSportsFacility SpaceType = "sports_facility"
 )
 
 func (e *SpaceType) Scan(src interface{}) error {
@@ -1028,6 +1037,14 @@ type Booking struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	CancellationPolicy CancellationPolicy
+}
+
+type ContactReveal struct {
+	ID        uuid.UUID
+	ViewerID  uuid.UUID
+	SpaceID   uuid.UUID
+	HostID    uuid.UUID
+	CreatedAt time.Time
 }
 
 type Landmark struct {

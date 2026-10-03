@@ -65,19 +65,6 @@ func (s *Service) RequestUpload(ctx context.Context, spaceID, hostID uuid.UUID, 
 		return Upload{}, err
 	}
 
-	count, err := s.store.Count(ctx, spaceID)
-	if err != nil {
-		return Upload{}, err
-	}
-	if count >= s.cfg.MaxPerSpace {
-		return Upload{}, ErrTooMany
-	}
-
-	position, err := s.store.NextPosition(ctx, spaceID)
-	if err != nil {
-		return Upload{}, err
-	}
-
 	// Generated in Go rather than by the database, because the object key
 	// embeds the id and the key has to exist before the row does.
 	id, err := uuid.NewV7()
@@ -86,7 +73,7 @@ func (s *Service) RequestUpload(ctx context.Context, spaceID, hostID uuid.UUID, 
 	}
 	key := ObjectKey(spaceID, id, contentType)
 
-	m, err := s.store.Create(ctx, id, spaceID, key, contentType, position)
+	m, err := s.store.Reserve(ctx, id, spaceID, key, contentType, s.cfg.MaxPerSpace)
 	if err != nil {
 		return Upload{}, err
 	}

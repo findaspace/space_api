@@ -60,6 +60,7 @@ func (h searchHandler) search(w http.ResponseWriter, r *http.Request) {
 		Text:      params.Get("q"),
 		Types:     queryList(r, "type"),
 		Mode:      params.Get("mode"),
+		Period:    params.Get("price_period"),
 		Locality:  params.Get("locality"),
 		MinPrice:  queryMoney(r, "min_price"),
 		MaxPrice:  queryMoney(r, "max_price"),
@@ -124,6 +125,8 @@ func coerceAttr(raw string) any {
 
 func writeSearchError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, search.ErrBadFilter):
+		WriteProblem(w, r, Problem{Status: http.StatusUnprocessableEntity, Title: "invalid rental mode or price period"})
 	case errors.Is(err, search.ErrBadSort):
 		WriteProblem(w, r, Problem{Status: http.StatusUnprocessableEntity, Title: "unknown sort",
 			Errors: []FieldError{{Field: "sort", Code: "unknown",

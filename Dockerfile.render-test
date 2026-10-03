@@ -1,0 +1,22 @@
+# API + one-worker container for a small, sleeping Render test deployment.
+FROM golang:1.26 AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/ ./cmd/...
+
+FROM debian:stable-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash ffmpeg ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /out/api /api
+COPY --from=build /out/worker /worker
+COPY --from=build /out/migrate /migrate
+COPY scripts/render-test.sh /render-test.sh
+ENV SPACE_WORKER_CONCURRENCY=1
+USER nobody
+EXPOSE 10000
+ENTRYPOINT ["/bin/bash", "/render-test.sh"]

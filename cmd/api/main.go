@@ -13,6 +13,7 @@ import (
 	"github.com/samnart1/space_api/internal/booking"
 	"github.com/samnart1/space_api/internal/calendar"
 	"github.com/samnart1/space_api/internal/config"
+	"github.com/samnart1/space_api/internal/contact"
 	"github.com/samnart1/space_api/internal/geo"
 	"github.com/samnart1/space_api/internal/identity"
 	"github.com/samnart1/space_api/internal/jobs"
@@ -65,11 +66,13 @@ func run() error {
 	defer stop()
 
 	pool, err := postgres.NewPool(ctx, postgres.Config{
-		URL:          cfg.DatabaseUrl,
-		MaxConns:     cfg.DBMaxConns,
-		MinConns:     cfg.DBMinConns,
-		ConnLifetime: cfg.DBConnLifetime,
-		PingTimeout:  cfg.DBPingTimeout,
+		URL:               cfg.DatabaseUrl,
+		MaxConns:          cfg.DBMaxConns,
+		MinConns:          cfg.DBMinConns,
+		ConnLifetime:      cfg.DBConnLifetime,
+		PingTimeout:       cfg.DBPingTimeout,
+		ExecMode:          cfg.DBExecMode,
+		StatementCacheCap: cfg.DBStatementCache,
 	})
 	if err != nil {
 		return err
@@ -86,12 +89,9 @@ func run() error {
 		return err
 	}
 
-	var sender sms.Sender
-	switch cfg.SMSProvider {
-	case "log":
-		sender = sms.LogSender{Log: log}
-	default:
-		return fmt.Errorf("unknown SPACE_SMS_PROVIDER %q", cfg.SMSProvider)
+	sender, err := sms.FromConfig(cfg.SMSProvider, cfg.ArkeselAPIKey, cfg.SMSSenderID, cfg.ArkeselSandbox, log)
+	if err != nil {
+		return err
 	}
 
 	identitySvc := identity.NewService(
@@ -202,7 +202,7 @@ func run() error {
 	)
 	paymentSvc.SetTransferHandler(payoutSvc)
 
-	messagingSvc := messaging.NewService(messaging.NewStore(pool), listingSvc)
+	messagingSvc := messaging.NewService(messaging.NewStore(pool), listingSvc).WithDirectContact(cfg.DirectContact)
 	reviewSvc := review.NewService(review.NewStore(pool))
 
 	notifySvc := notify.NewService(notify.NewStore(pool), enqueuer, sender,
@@ -265,31 +265,34 @@ func run() error {
 	}()
 
 	router := httpapi.NewRouter(httpapi.Deps{
-		Pool:           pool,
-		Logger:         log,
-		PingTimeout:    cfg.DBPingTimeout,
-		MaxBodyBytes:   1 << 20,
-		Version:        version,
-		Commit:         commit,
-		Identity:       identitySvc,
-		Tokens:         tokens,
-		TrustProxy:     cfg.TrustProxy,
-		Listing:        listingSvc,
-		Media:          mediaSvc,
-		Calendar:       calendarSvc,
-		Booking:        bookingSvc,
-		Payment:        paymentSvc,
-		Payout:         payoutSvc,
-		Messaging:      messagingSvc,
-		Review:         reviewSvc,
-		Notify:         notifySvc,
-		Search:         searchSvc,
-		Limits:         limits,
-		CORSOrigins:    cfg.CORSOrigins,
-		RequestTimeout: cfg.RequestTimeout,
-		Metrics:        met,
-		Geo:            geoSvc,
-		BFFSecret:      cfg.BFFSecret,
+		PaymentsEnabled: cfg.PaymentsEnabled,
+		DirectContact:   cfg.DirectContact,
+		Contact:         contact.NewService(pool, cfg.ContactDailyCap),
+		Pool:            pool,
+		Logger:          log,
+		PingTimeout:     cfg.DBPingTimeout,
+		MaxBodyBytes:    1 << 20,
+		Version:         version,
+		Commit:          commit,
+		Identity:        identitySvc,
+		Tokens:          tokens,
+		TrustProxy:      cfg.TrustProxy,
+		Listing:         listingSvc,
+		Media:           mediaSvc,
+		Calendar:        calendarSvc,
+		Booking:         bookingSvc,
+		Payment:         paymentSvc,
+		Payout:          payoutSvc,
+		Messaging:       messagingSvc,
+		Review:          reviewSvc,
+		Notify:          notifySvc,
+		Search:          searchSvc,
+		Limits:          limits,
+		CORSOrigins:     cfg.CORSOrigins,
+		RequestTimeout:  cfg.RequestTimeout,
+		Metrics:         met,
+		Geo:             geoSvc,
+		BFFSecret:       cfg.BFFSecret,
 	})
 
 	log.Info("paystack configured",

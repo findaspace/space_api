@@ -36,6 +36,9 @@ FROM spaces WHERE id = ANY(@ids::uuid[]);
 
 -- name: UpdateSpace :one
 UPDATE spaces SET
+    status = 'draft',
+    rental_mode      = COALESCE(sqlc.narg('rental_mode'), rental_mode),
+    price_period     = COALESCE(sqlc.narg('price_period'), price_period),
     title            = COALESCE(sqlc.narg('title'), title),
     description      = COALESCE(sqlc.narg('description'), description),
     base_price_minor = COALESCE(sqlc.narg('base_price_minor'), base_price_minor),

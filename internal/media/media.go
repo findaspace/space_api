@@ -31,6 +31,7 @@ type Media struct {
 }
 
 var (
+	ErrLastPhoto    = errors.New("media: a public listing needs a ready photo")
 	ErrNotFound     = errors.New("media: not found")
 	ErrNotUploaded  = errors.New("media: object was never uploaded")
 	ErrTooMany      = errors.New("media: photo limit reached")

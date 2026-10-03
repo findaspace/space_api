@@ -1,4 +1,4 @@
-FROM golang:1.27 AS build
+FROM golang:1.26 AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./
@@ -13,13 +13,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
       -o /out/ ./cmd/...
 
-FROM gcr.io/distroless/static:nonroot
-COPY --from=build /out/api /api
-COPY --from=build /out/migrate /migrate
-USER nonroot:nonroot
-EXPOSE 8080
-ENTRYPOINT ["/api"]
-
 FROM debian:stable-slim AS worker
 
 RUN apt-get update \
@@ -30,3 +23,11 @@ COPY --from=build /out/worker /worker
 
 USER nobody
 ENTRYPOINT ["/worker"]
+
+FROM gcr.io/distroless/static:nonroot AS api
+COPY --from=build /out/api /api
+COPY --from=build /out/migrate /migrate
+USER nonroot:nonroot
+EXPOSE 8080
+ENTRYPOINT ["/api"]
+
