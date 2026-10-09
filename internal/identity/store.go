@@ -66,7 +66,7 @@ func (s *Store) Summaries(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]U
 func (e *RateLimitedError) Error() string        { return "identity: too many requests" }
 func (e *RateLimitedError) Is(target error) bool { return target == ErrTooManyOTP }
 
-const userColumns = `id, phone_e164, email, display_name, status::text, phone_verified_at, created_at`
+const userColumns = `id, COALESCE(phone_e164, ''), email, display_name, status::text, phone_verified_at, created_at`
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
@@ -95,12 +95,18 @@ func (s *Store) CountRecent(ctx context.Context, phone, ip string, window time.D
 func (s *Store) CreateChallenge(ctx context.Context, phone, ip string, codeHash []byte, ttl time.Duration, maxAttempts int16) (Challenge, error) {
 	ch := Challenge{Phone: phone, CodeHash: codeHash, MaxAttempts: maxAttempts}
 
-	err := s.pool.QueryRow(ctx, `
-		INSERT INTO otp_challenges (phone_e164, code_hash, max_attempts, expires_at, request_ip)
-		VALUES ($1, $2, $3, now() + $4::interval, $5)
-		RETURNING id, expires_at`,
-		phone, codeHash, maxAttempts, ttl, ip,
-	).Scan(&ch.ID, &ch.ExpiresAt)
+	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", "otp:"+phone); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "UPDATE otp_challenges SET consumed_at=now() WHERE phone_e164=$1 AND consumed_at IS NULL", phone); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `
+  INSERT INTO otp_challenges (phone_e164, code_hash, max_attempts, expires_at, request_ip)
+  VALUES ($1, $2, $3, now() + $4::interval, $5)
+  RETURNING id, expires_at`, phone, codeHash, maxAttempts, ttl, ip).Scan(&ch.ID, &ch.ExpiresAt)
+	})
 	if err != nil {
 		return Challenge{}, fmt.Errorf("create challenge: %w", err)
 	}
@@ -423,4 +429,33 @@ func (s *Store) SetDisplayName(ctx context.Context, id uuid.UUID, name string) e
 		return ErrOTPNotFound
 	}
 	return nil
+}
+
+// AuthorizeSession checks revocation and account status on every authenticated
+// request. Rotated sessions remain usable until their expiry; refresh-token
+// rotation alone must not invalidate an access token already in flight.
+func (s *Store) AuthorizeSession(ctx context.Context, userID, sessionID uuid.UUID) (User, error) {
+	var user User
+	var roles []string
+	err := s.pool.QueryRow(ctx, `SELECT `+userColumns+`,
+ ARRAY(SELECT role::text FROM role_grants WHERE user_id=users.id ORDER BY role)
+ FROM users WHERE id=$1 AND EXISTS (
+ SELECT 1 FROM sessions WHERE id=$2 AND user_id=users.id
+ AND revoked_at IS NULL AND expires_at > now())`, userID, sessionID).Scan(
+		&user.ID, &user.Phone, &user.Email, &user.DisplayName, &user.Status,
+		&user.PhoneVerifiedAt, &user.CreatedAt, &roles)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return User{}, ErrSessionInvalid
+	}
+	if err != nil {
+		return User{}, fmt.Errorf("authorize session: %w", err)
+	}
+	if user.Status != StatusActive {
+		return User{}, ErrUserSuspended
+	}
+	user.Roles = make([]Role, len(roles))
+	for i, role := range roles {
+		user.Roles[i] = Role(role)
+	}
+	return user, nil
 }

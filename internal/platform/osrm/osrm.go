@@ -113,7 +113,7 @@ func (c *Client) TableFromOne(ctx context.Context, origin Point, destinations []
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrUnavailable, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {

@@ -50,7 +50,10 @@ type NotificationDeliverer interface {
 	Deliver(ctx context.Context, notificationID uuid.UUID) error
 }
 
+type DeletionCleaner interface{ Sweep(context.Context) error }
+
 type Deps struct {
+	Cleanup       DeletionCleaner
 	Media         MediaProcessor
 	Bookings      HoldExpirer
 	Payouts       PayoutReconciler
@@ -210,6 +213,7 @@ func (w *RevealReviewsWorker) Work(ctx context.Context, job *river.Job[RevealRev
 
 func Register(deps Deps) (*river.Workers, error) {
 	workers := river.NewWorkers()
+	river.AddWorker(workers, &SweepDeletedStorageWorker{deps: deps})
 
 	river.AddWorker(workers, &ProcessMediaWorker{deps: deps})
 	river.AddWorker(workers, &DeliverNotificationWorker{deps: deps})
@@ -223,6 +227,7 @@ func Register(deps Deps) (*river.Workers, error) {
 	river.AddWorker(workers, &RouteListingWorker{deps: deps})
 	river.AddWorker(workers, &BackfillRoutesWorker{deps: deps})
 	river.AddWorker(workers, &ProcessVideoWorker{deps: deps})
+	river.AddWorker(workers, &SweepVideosWorker{deps: deps})
 	// river.AddWorker(workers, &SweepUploadsWorker{deps: deps})
 
 	return workers, nil
@@ -239,6 +244,7 @@ func Periodic() []*river.PeriodicJob {
 
 	return []*river.PeriodicJob{
 		every(5*time.Minute, ExpireHoldsArgs{}, true),
+		every(time.Hour, SweepDeletedStorageArgs{}, true),
 		every(10*time.Minute, ReconcilePayoutsArgs{}, true),
 		every(time.Hour, SweepUploadsArgs{}, false),
 		every(time.Hour, TrialBalanceArgs{}, true),
@@ -307,4 +313,16 @@ func (w *SweepVideosWorker) Work(ctx context.Context, job *river.Job[SweepVideos
 		w.deps.Log.InfoContext(ctx, "removed abandoned walkthroughs", slog.Int("count", n))
 	}
 	return nil
+}
+
+type SweepDeletedStorageWorker struct {
+	river.WorkerDefaults[SweepDeletedStorageArgs]
+	deps Deps
+}
+
+func (w *SweepDeletedStorageWorker) Work(ctx context.Context, job *river.Job[SweepDeletedStorageArgs]) error {
+	if w.deps.Cleanup == nil {
+		return nil
+	}
+	return w.deps.Cleanup.Sweep(ctx)
 }

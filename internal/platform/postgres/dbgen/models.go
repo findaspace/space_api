@@ -1047,6 +1047,21 @@ type ContactReveal struct {
 	CreatedAt time.Time
 }
 
+type ExternalIdentity struct {
+	Provider  string
+	Issuer    string
+	Subject   string
+	UserID    uuid.UUID
+	Email     *string
+	CreatedAt time.Time
+}
+
+type ExternalLoginExchange struct {
+	TokenHash []byte
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
+
 type Landmark struct {
 	ID        uuid.UUID
 	Name      string
@@ -1077,6 +1092,19 @@ type LedgerTransaction struct {
 	Memo        string
 	ExternalRef *string
 	CreatedAt   time.Time
+}
+
+type ListingReport struct {
+	ID         uuid.UUID
+	ReporterID uuid.UUID
+	SpaceID    uuid.UUID
+	Reason     string
+	Details    string
+	Status     string
+	CreatedAt  time.Time
+	ReviewedAt pgtype.Timestamptz
+	ReviewerID uuid.NullUUID
+	ReviewNote string
 }
 
 type Message struct {
@@ -1316,6 +1344,13 @@ type StayRule struct {
 	CancellationPolicy CancellationPolicy
 }
 
+type StorageDeletion struct {
+	ObjectKey string
+	NotBefore time.Time
+	CreatedAt time.Time
+	DeletedAt pgtype.Timestamptz
+}
+
 type Thread struct {
 	ID            uuid.UUID
 	SpaceID       uuid.UUID
@@ -1328,15 +1363,29 @@ type Thread struct {
 	CreatedAt     time.Time
 }
 
+type TrustAudit struct {
+	ID        uuid.UUID
+	ActorID   uuid.UUID
+	Action    string
+	SubjectID uuid.UUID
+	CreatedAt time.Time
+}
+
 type User struct {
 	ID              uuid.UUID
-	PhoneE164       string
+	PhoneE164       *string
 	Email           *string
 	DisplayName     string
 	Status          UserStatus
 	PhoneVerifiedAt pgtype.Timestamptz
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+}
+
+type UserBlock struct {
+	BlockerID uuid.UUID
+	BlockedID uuid.UUID
+	CreatedAt time.Time
 }
 
 type WebhookEvent struct {

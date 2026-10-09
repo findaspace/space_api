@@ -84,6 +84,9 @@ func (s *Service) Deliver(ctx context.Context, notificationID uuid.UUID) error {
 		return err
 	}
 
+	if phone == "" {
+		return s.store.Finish(ctx, notificationID, "sms", "skipped", "no verified contact phone")
+	}
 	if err := s.sender.Send(ctx, phone, d.SMS); err != nil {
 		// 'failed' is claimable again, so a River retry is a real second
 		// attempt. Only 'sending' is the ambiguous state that blocks resends.

@@ -1,0 +1,31 @@
+groups:
+  - name: findaspace-api
+    rules:
+      - alert: FindaspaceAPIUnavailable
+        expr: up{job="findaspace-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Findaspace API scrape is unavailable
+      - alert: FindaspaceServerErrors
+        expr: sum(rate(space_http_request_duration_seconds_count{status="5xx"}[5m])) / clamp_min(sum(rate(space_http_request_duration_seconds_count[5m])), 0.01) > 0.05 and sum(increase(space_http_request_duration_seconds_count[5m])) > 20
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: More than five percent of API requests are failing
+      - alert: FindaspaceSlowAPI
+        expr: histogram_quantile(0.95, sum by (le) (rate(space_http_request_duration_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: API p95 latency exceeds two seconds
+      - alert: FindaspaceDatabasePoolPressure
+        expr: space_db_connections_acquired / space_db_connections_max > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Database pool remains above ninety percent utilisation

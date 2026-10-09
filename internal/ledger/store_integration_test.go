@@ -44,17 +44,17 @@ func testHost(t *testing.T, pool *pgxpool.Pool) uuid.UUID {
 
 	t.Cleanup(func() {
 		ctx := context.Background()
-		pool.Exec(ctx, `ALTER TABLE ledger_entries DISABLE TRIGGER ledger_entries_immutable`)
-		pool.Exec(ctx, `
+		_, _ = pool.Exec(ctx, `ALTER TABLE ledger_entries DISABLE TRIGGER ledger_entries_immutable`)
+		_, _ = pool.Exec(ctx, `
 			DELETE FROM ledger_entries WHERE transaction_id IN (
 				SELECT transaction_id FROM ledger_entries WHERE party_id = $1
 			)`, id)
-		pool.Exec(ctx, `
+		_, _ = pool.Exec(ctx, `
 			DELETE FROM ledger_transactions WHERE id NOT IN (
 				SELECT DISTINCT transaction_id FROM ledger_entries
 			)`)
-		pool.Exec(ctx, `ALTER TABLE ledger_entries ENABLE TRIGGER ledger_entries_immutable`)
-		pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
+		_, _ = pool.Exec(ctx, `ALTER TABLE ledger_entries ENABLE TRIGGER ledger_entries_immutable`)
+		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
 	})
 	return id
 }
@@ -101,7 +101,7 @@ func TestDatabaseRejectsUnbalancedPosting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	var txID uuid.UUID
 	if err := tx.QueryRow(ctx, `

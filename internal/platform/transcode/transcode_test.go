@@ -131,7 +131,7 @@ func TestVideoIsFaststart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	n, _ := f.Read(head)
 
 	if !contains(head[:n], []byte("moov")) {

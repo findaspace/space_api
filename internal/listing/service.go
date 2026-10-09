@@ -8,8 +8,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const minDescriptionLen = 40
-
 // RoleGranter is declared here, by the consumer, so this package never imports
 // identity. identity.Service satisfies it.
 type RoleGranter interface {

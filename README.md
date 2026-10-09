@@ -4,7 +4,7 @@ Go API and background worker for a Ghana space marketplace. The companion `space
 
 ## Local development
 
-Requires Go 1.26+, PostgreSQL 18 with PostGIS, an S3-compatible store, and FFmpeg/FFprobe for video processing. The supplied Docker Compose starts PostgreSQL, MinIO and optional OSRM. For the essential dependencies only:
+Requires Go 1.27.2+, PostgreSQL 18 with PostGIS, an S3-compatible store, and FFmpeg/FFprobe for video processing. The supplied Docker Compose starts PostgreSQL, MinIO and optional OSRM. For the essential dependencies only:
 
 ```sh
 cp .env.example .env

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/samnart1/space_api/internal/listing"
 	"github.com/samnart1/space_api/internal/platform/telemetry"
@@ -301,6 +302,11 @@ func max32(a, b int32) int32 {
 }
 
 func writeListingError(w http.ResponseWriter, r *http.Request, err error) {
+	var databaseError *pgconn.PgError
+	if errors.As(err, &databaseError) && databaseError.ConstraintName == "spaces_host_phone_verified" {
+		WriteProblem(w, r, Problem{Status: 422, Title: "Verify your phone before publishing", Errors: []FieldError{{Field: "phone", Code: "verification_required", Detail: "Add and verify a contact number in your account before submitting your listing."}}})
+		return
+	}
 	var ve *listing.ValidationError
 	if errors.As(err, &ve) {
 		fields := make([]FieldError, 0, len(ve.Issues))

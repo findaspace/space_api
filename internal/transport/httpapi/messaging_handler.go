@@ -222,6 +222,8 @@ func (h messagingHandler) markRead(w http.ResponseWriter, r *http.Request) {
 
 func writeMessagingError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, messaging.ErrBlocked):
+		WriteProblem(w, r, Problem{Type: "urn:findaspace:messaging-unavailable", Status: 403, Title: "Messaging is unavailable for this conversation"})
 	case errors.Is(err, messaging.ErrNotFound), errors.Is(err, listing.ErrNotFound):
 		WriteProblem(w, r, Problem{Status: http.StatusNotFound, Title: "not found"})
 	case errors.Is(err, messaging.ErrOwnListing):

@@ -119,14 +119,14 @@ func database(ctx context.Context) error {
 		return err
 	}
 	if !valid {
-		return errors.New("Ghana spatial query failed")
+		return errors.New("ghana spatial query failed")
 	}
 	var queues bool
 	if err := pool.QueryRow(ctx, `SELECT to_regclass('river_job') IS NOT NULL`).Scan(&queues); err != nil {
 		return err
 	}
 	if !queues {
-		return errors.New("River schema missing")
+		return errors.New("river schema missing")
 	}
 	return nil
 }
@@ -158,7 +158,7 @@ func storage(ctx context.Context) (result error) {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	allowedHeaders := strings.ToLower(resp.Header.Get("Access-Control-Allow-Headers"))
 	if resp.StatusCode >= 300 || !corsOrigin(resp, origin) || !strings.Contains(resp.Header.Get("Access-Control-Allow-Methods"), "PUT") || (!strings.Contains(allowedHeaders, "content-type") && allowedHeaders != "*") {
 		return errors.New("presigned upload CORS preflight failed")
@@ -178,7 +178,7 @@ func storage(ctx context.Context) (result error) {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode >= 300 || !corsOrigin(resp, origin) {
 		return fmt.Errorf("presigned upload failed or lacks CORS (HTTP %d)", resp.StatusCode)
 	}
@@ -194,7 +194,7 @@ func storage(ctx context.Context) (result error) {
 		return err
 	}
 	actual, err := io.ReadAll(io.LimitReader(body, 1024))
-	body.Close()
+	_ = body.Close()
 	if err != nil {
 		return err
 	}
@@ -207,7 +207,7 @@ func storage(ctx context.Context) (result error) {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	actual, err = io.ReadAll(io.LimitReader(resp.Body, 1024))
 	if err != nil {
 		return err

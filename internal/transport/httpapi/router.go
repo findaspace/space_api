@@ -21,6 +21,7 @@ import (
 	"github.com/samnart1/space_api/internal/platform/ratelimit"
 	"github.com/samnart1/space_api/internal/review"
 	"github.com/samnart1/space_api/internal/search"
+	"github.com/samnart1/space_api/internal/trust"
 )
 
 type Deps struct {
@@ -32,6 +33,7 @@ type Deps struct {
 	Commit          string
 	Identity        *identity.Service
 	Tokens          *identity.TokenIssuer
+	External        *identity.ExternalVerifier
 	TrustProxy      bool
 	Listing         *listing.Service
 	Media           *media.Service
@@ -82,7 +84,21 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /v1/auth/refresh", authLimit(http.HandlerFunc(auth.refresh)))
 	mux.Handle("POST /v1/auth/logout", authLimit(http.HandlerFunc(auth.logout)))
 
-	authed := RequireAuth(d.Tokens)
+	authed := RequireAuth(d.Tokens, d.Identity)
+	trustH := trustHandler{store: trust.NewStore(d.Pool), users: d.Identity}
+	mux.Handle("POST /v1/spaces/{id}/reports", authed(writeLimit(http.HandlerFunc(trustH.report))))
+	mux.Handle("GET /v1/threads/{id}/safety", authed(readLimit(http.HandlerFunc(trustH.boundary))))
+	mux.Handle("POST /v1/threads/{id}/block", authed(writeLimit(http.HandlerFunc(trustH.block))))
+	mux.Handle("DELETE /v1/threads/{id}/block", authed(writeLimit(http.HandlerFunc(trustH.block))))
+	mux.Handle("DELETE /v1/me", authed(writeLimit(http.HandlerFunc(trustH.deleteAccount))))
+	mux.Handle("GET /v1/admin/reports", Chain(http.HandlerFunc(trustH.reports), authed, RequireRole(identity.RoleAdmin, identity.RoleSupport)))
+	mux.Handle("POST /v1/admin/reports/{id}/review", Chain(http.HandlerFunc(trustH.review), authed, RequireRole(identity.RoleAdmin, identity.RoleSupport), writeLimit))
+
+	external := externalHandler{verifier: d.External, users: d.Identity}
+	mux.Handle("POST /v1/auth/external", authLimit(http.HandlerFunc(external.login)))
+	mux.Handle("POST /v1/me/sign-in-methods", authed(authLimit(http.HandlerFunc(external.link))))
+	mux.Handle("POST /v1/me/phone", authed(authLimit(http.HandlerFunc(external.phone))))
+	mux.Handle("GET /v1/me/sign-in-methods", authed(http.HandlerFunc(external.methods)))
 
 	nh := notifyHandler{svc: d.Notify}
 	contactH := contactHandler{svc: d.Contact}
@@ -176,7 +192,8 @@ func NewRouter(d Deps) http.Handler {
 	// mux.HandleFunc("POST /v1/auth/refresh", auth.refresh)
 	// mux.HandleFunc("POST /v1/auth/logout", auth.logout)
 
-	mux.Handle("GET /v1/me", RequireAuth(d.Tokens)(http.HandlerFunc(auth.me)))
+	mux.Handle("GET /v1/me", authed(http.HandlerFunc(auth.me)))
+	mux.Handle("PATCH /v1/me", authed(writeLimit(http.HandlerFunc(auth.patchMe))))
 	mux.Handle("GET /.well-known/space-jwks.json", publicKeyHandler(d.Tokens))
 
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

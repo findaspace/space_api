@@ -66,3 +66,7 @@ func (ProcessVideoArgs) Kind() string { return "process_video" }
 type SweepVideosArgs struct{}
 
 func (SweepVideosArgs) Kind() string { return "sweep_videos" }
+
+type SweepDeletedStorageArgs struct{}
+
+func (SweepDeletedStorageArgs) Kind() string { return "sweep_deleted_storage" }

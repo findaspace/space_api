@@ -275,6 +275,7 @@ func run() error {
 		Version:         version,
 		Commit:          commit,
 		Identity:        identitySvc,
+		External:        identity.NewExternalVerifier(map[string]string{"google": cfg.GoogleClientID, "microsoft": cfg.MicrosoftClientID, "apple": cfg.AppleClientID}),
 		Tokens:          tokens,
 		TrustProxy:      cfg.TrustProxy,
 		Listing:         listingSvc,

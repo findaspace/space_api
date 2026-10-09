@@ -2,12 +2,15 @@ package httpapi
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/samnart1/space_api/internal/identity"
+	"github.com/samnart1/space_api/internal/platform/telemetry"
 )
 
 type Principal struct {
@@ -32,12 +35,15 @@ func PrincipalFrom(ctx context.Context) (Principal, bool) {
 	return p, ok
 }
 
-// RequireAuth validates the bearer token and does not touch the database. That
-// is the trade JWTs buy: no per-request query, at the cost of a suspended user
-// keeping access until their access token expires. Keep the TTL short.
-func RequireAuth(tokens *identity.TokenIssuer) Middleware {
+type sessionAuthorizer interface {
+	AuthorizeSession(context.Context, uuid.UUID, uuid.UUID) (identity.User, error)
+}
+
+// RequireAuth verifies the signature, then loads the live session and roles.
+func RequireAuth(tokens *identity.TokenIssuer, sessions sessionAuthorizer) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "private, no-store")
 			raw, ok := bearerToken(r)
 			if !ok {
 				unauthorized(w, r, "missing bearer token")
@@ -61,7 +67,21 @@ func RequireAuth(tokens *identity.TokenIssuer) Middleware {
 				return
 			}
 
-			p := Principal{UserID: userID, SessionID: sessionID, Roles: claims.Roles}
+			user, err := sessions.AuthorizeSession(r.Context(), userID, sessionID)
+			if err != nil {
+				switch {
+				case errors.Is(err, identity.ErrSessionInvalid):
+					unauthorized(w, r, "session revoked or expired")
+				case errors.Is(err, identity.ErrUserSuspended):
+					WriteProblem(w, r, Problem{Status: http.StatusForbidden, Title: "account unavailable"})
+				default:
+					telemetry.Logger(r.Context()).Error("session authorization failed", slog.Any("error", err))
+					w.Header().Set("Retry-After", "5")
+					WriteProblem(w, r, Problem{Status: http.StatusServiceUnavailable, Title: "session verification unavailable"})
+				}
+				return
+			}
+			p := Principal{UserID: userID, SessionID: sessionID, Roles: user.Roles}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey{}, p)))
 		})
 	}

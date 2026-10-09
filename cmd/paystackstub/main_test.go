@@ -54,7 +54,7 @@ func initialize(t *testing.T, base string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	var out struct {
 		Status bool `json:"status"`
 		Data   struct {

@@ -164,7 +164,7 @@ func (s *Stub) pay(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "the API did not accept the webhook: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		res.Body.Close()
+		_ = res.Body.Close()
 		if res.StatusCode != http.StatusOK {
 			http.Error(w, fmt.Sprintf("the API rejected the webhook with %d", res.StatusCode), http.StatusBadGateway)
 			return

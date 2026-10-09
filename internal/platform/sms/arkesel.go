@@ -58,7 +58,7 @@ func (s *ArkeselSender) Send(ctx context.Context, toE164, body string) error {
 	if err != nil {
 		return fmt.Errorf("send sms: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 

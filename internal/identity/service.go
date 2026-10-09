@@ -200,3 +200,7 @@ func (s *Service) pair(user User, sess Session, refresh string) (TokenPair, erro
 func (s *Service) GrantHost(ctx context.Context, userID uuid.UUID) error {
 	return s.store.GrantRole(ctx, userID, RoleHost)
 }
+
+func (s *Service) AuthorizeSession(ctx context.Context, userID, sessionID uuid.UUID) (User, error) {
+	return s.store.AuthorizeSession(ctx, userID, sessionID)
+}

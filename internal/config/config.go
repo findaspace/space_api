@@ -100,8 +100,11 @@ type Config struct {
 	TranscodeWorkDir string
 	VideoMaxSeconds  int
 
-	RefreshGrace time.Duration
-	BFFSecret    string
+	RefreshGrace      time.Duration
+	BFFSecret         string
+	GoogleClientID    string
+	MicrosoftClientID string
+	AppleClientID     string
 
 	BookingRequestTTL time.Duration
 	BookingPaymentTTL time.Duration
@@ -197,12 +200,15 @@ func Load() (Config, error) {
 	l := &loader{}
 
 	cfg := Config{
-		Env:            l.str("SPACE_ENV", "development"),
-		HTTPAddr:       l.str("SPACE_HTTP_ADDR", ":8000"),
-		ReadTimeout:    l.duration("SPACE_HTTP_READ_TIMEOUT", 10*time.Second),
-		WriteTimeout:   l.duration("SPACE_HTTP_WRITE_TIMEOUT", 30*time.Second),
-		IdleTimeout:    l.duration("SPACE_HTTP_IDLE_TIMEOUT", 120*time.Second),
-		ShudownTimeout: l.duration("SPACE_SHUTDOWN_TIMEOUT", 20*time.Second),
+		GoogleClientID:    strings.TrimSpace(os.Getenv("SPACE_GOOGLE_CLIENT_ID")),
+		MicrosoftClientID: strings.TrimSpace(os.Getenv("SPACE_MICROSOFT_CLIENT_ID")),
+		AppleClientID:     strings.TrimSpace(os.Getenv("SPACE_APPLE_CLIENT_ID")),
+		Env:               l.str("SPACE_ENV", "development"),
+		HTTPAddr:          l.str("SPACE_HTTP_ADDR", ":8000"),
+		ReadTimeout:       l.duration("SPACE_HTTP_READ_TIMEOUT", 10*time.Second),
+		WriteTimeout:      l.duration("SPACE_HTTP_WRITE_TIMEOUT", 30*time.Second),
+		IdleTimeout:       l.duration("SPACE_HTTP_IDLE_TIMEOUT", 120*time.Second),
+		ShudownTimeout:    l.duration("SPACE_SHUTDOWN_TIMEOUT", 20*time.Second),
 
 		DatabaseUrl:    l.str("SPACE_DATABASE_URL", ""),
 		DBMaxConns:     l.int32("SPACE_DB_MAX_CONNS", 10),
@@ -341,6 +347,9 @@ func Load() (Config, error) {
 	}
 	if cfg.IsProduction() && len(cfg.BFFSecret) < 32 {
 		problems = append(problems, "SPACE_BFF_SECRET must be at least 32 characters in production")
+	}
+	if cfg.UploadURLTTL > time.Hour {
+		problems = append(problems, "SPACE_UPLOAD_URL_TTL must not exceed one hour; account media cleanup depends on upload links expiring")
 	}
 	if cfg.RefreshGrace > 2*time.Minute {
 		problems = append(problems, "SPACE_REFRESH_GRACE above two minutes weakens theft detection on refresh tokens")

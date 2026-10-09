@@ -143,7 +143,7 @@ func (s *Service) ProcessVideo(ctx context.Context, videoID uuid.UUID) error {
 	if err != nil {
 		return fmt.Errorf("make work directory: %w", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	// ffmpeg needs to seek, so the source goes to disk rather than through a
 	// pipe. This is why the worker needs scratch space proportional to the
@@ -213,21 +213,25 @@ func (s *Service) download(ctx context.Context, key, path string) error {
 	if err != nil {
 		return ErrNotUploaded
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Bounded even though the HEAD already checked: the object could have been
 	// replaced between the check and here, and an unbounded copy fills the
 	// worker's disk.
-	if _, err := io.Copy(f, io.LimitReader(body, s.cfg.VideoMaxBytes+1)); err != nil {
+	n, err := io.Copy(f, io.LimitReader(body, s.cfg.VideoMaxBytes+1))
+	if err != nil {
 		return fmt.Errorf("download video: %w", err)
 	}
-	return nil
+	if n > s.cfg.VideoMaxBytes {
+		return ErrVideoTooLarge
+	}
+	return f.Close()
 }
 
 func (s *Service) Video(ctx context.Context, spaceID uuid.UUID) (Video, error) {

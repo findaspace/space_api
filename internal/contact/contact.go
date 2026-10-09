@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -37,7 +38,7 @@ func (s *Service) Reveal(ctx context.Context, viewerID, spaceID uuid.UUID) (Cont
 	if err != nil {
 		return Contact{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	var locked uuid.UUID
 	if err = tx.QueryRow(ctx, "SELECT id FROM users WHERE id=$1 AND status='active' FOR UPDATE", viewerID).Scan(&locked); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -47,7 +48,7 @@ func (s *Service) Reveal(ctx context.Context, viewerID, spaceID uuid.UUID) (Cont
 	}
 	var hostID uuid.UUID
 	var c Contact
-	err = tx.QueryRow(ctx, "SELECT s.host_id,u.display_name,u.phone_e164 FROM spaces s JOIN users u ON u.id=s.host_id WHERE s.id=$1 AND s.status='published' AND u.status='active'", spaceID).Scan(&hostID, &c.DisplayName, &c.Phone)
+	err = tx.QueryRow(ctx, "SELECT s.host_id,u.display_name,u.phone_e164 FROM spaces s JOIN users u ON u.id=s.host_id WHERE s.id=$1 AND s.status='published' AND u.status='active' AND u.phone_e164 IS NOT NULL AND u.phone_verified_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM user_blocks b WHERE (b.blocker_id=$2 AND b.blocked_id=u.id) OR (b.blocker_id=u.id AND b.blocked_id=$2)) FOR SHARE OF u", spaceID, viewerID).Scan(&hostID, &c.DisplayName, &c.Phone)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Contact{}, ErrNotFound
 	}
@@ -65,6 +66,10 @@ func (s *Service) Reveal(ctx context.Context, viewerID, spaceID uuid.UUID) (Cont
 			return Contact{}, ErrTooMany
 		}
 		if _, err = tx.Exec(ctx, "INSERT INTO contact_reveals(viewer_id,space_id,host_id) VALUES($1,$2,$3)", viewerID, spaceID, hostID); err != nil {
+			var dbErr *pgconn.PgError
+			if errors.As(err, &dbErr) && dbErr.ConstraintName == "contact_blocked" {
+				return Contact{}, ErrNotFound
+			}
 			return Contact{}, err
 		}
 	}

@@ -38,11 +38,11 @@ func fixture(t *testing.T, pool *pgxpool.Pool) (spaceID, hostID, guestID uuid.UU
 	ctx := context.Background()
 
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (phone_e164) VALUES ($1) RETURNING id`, testPhone()).Scan(&hostID); err != nil {
+		`INSERT INTO users (phone_e164,phone_verified_at) VALUES ($1,now()) RETURNING id`, testPhone()).Scan(&hostID); err != nil {
 		t.Fatalf("create host: %v", err)
 	}
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (phone_e164) VALUES ($1) RETURNING id`, testPhone()).Scan(&guestID); err != nil {
+		`INSERT INTO users (phone_e164,phone_verified_at) VALUES ($1,now()) RETURNING id`, testPhone()).Scan(&guestID); err != nil {
 		t.Fatalf("create guest: %v", err)
 	}
 
@@ -59,9 +59,9 @@ func fixture(t *testing.T, pool *pgxpool.Pool) (spaceID, hostID, guestID uuid.UU
 
 	t.Cleanup(func() {
 		ctx := context.Background()
-		pool.Exec(ctx, `DELETE FROM bookings WHERE space_id = $1`, spaceID)
-		pool.Exec(ctx, `DELETE FROM spaces WHERE id = $1`, spaceID)
-		pool.Exec(ctx, `DELETE FROM users WHERE id = ANY($1)`, []uuid.UUID{hostID, guestID})
+		_, _ = pool.Exec(ctx, `DELETE FROM bookings WHERE space_id = $1`, spaceID)
+		_, _ = pool.Exec(ctx, `DELETE FROM spaces WHERE id = $1`, spaceID)
+		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE id = ANY($1)`, []uuid.UUID{hostID, guestID})
 	})
 	return spaceID, hostID, guestID
 }
@@ -100,14 +100,14 @@ func TestConcurrentHoldsExactlyOneWins(t *testing.T) {
 	ctx := context.Background()
 	for i := range guests {
 		if err := pool.QueryRow(ctx,
-			`INSERT INTO users (phone_e164) VALUES ($1) RETURNING id`,
+			`INSERT INTO users (phone_e164,phone_verified_at) VALUES ($1,now()) RETURNING id`,
 			testPhone()).Scan(&guests[i]); err != nil {
 			t.Fatalf("create guest %d: %v", i, err)
 		}
 	}
 	t.Cleanup(func() {
-		pool.Exec(context.Background(), `DELETE FROM bookings WHERE guest_id = ANY($1)`, guests)
-		pool.Exec(context.Background(), `DELETE FROM users WHERE id = ANY($1)`, guests)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM bookings WHERE guest_id = ANY($1)`, guests)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM users WHERE id = ANY($1)`, guests)
 	})
 
 	var (

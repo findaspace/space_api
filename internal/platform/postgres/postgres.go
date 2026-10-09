@@ -73,6 +73,9 @@ func NewPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 }
 
 func InTx(ctx context.Context, pool *pgxpool.Pool, fn func(pgx.Tx) error) (err error) {
+	rollbackCtx := func() (context.Context, context.CancelFunc) {
+		return context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	}
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -80,11 +83,15 @@ func InTx(ctx context.Context, pool *pgxpool.Pool, fn func(pgx.Tx) error) (err e
 
 	defer func() {
 		if p := recover(); p != nil {
-			_ = tx.Rollback(context.WithoutCancel(ctx))
+			cleanupCtx, cancel := rollbackCtx()
+			defer cancel()
+			_ = tx.Rollback(cleanupCtx)
 			panic(p)
 		}
 		if err != nil {
-			rbErr := tx.Rollback(context.WithoutCancel(ctx))
+			cleanupCtx, cancel := rollbackCtx()
+			defer cancel()
+			rbErr := tx.Rollback(cleanupCtx)
 			if rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
 				err = errors.Join(err, fmt.Errorf("rollback tx: %w", rbErr))
 			}

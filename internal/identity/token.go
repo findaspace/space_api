@@ -81,6 +81,7 @@ func (t *TokenIssuer) Verify(raw string) (*AccessClaims, error) {
 		jwt.WithIssuer(tokenIssuer),
 		jwt.WithAudience(tokenAudience),
 		jwt.WithExpirationRequired(),
+		jwt.WithIssuedAt(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrSessionInvalid, err)

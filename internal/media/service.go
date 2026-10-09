@@ -134,7 +134,7 @@ func (s *Service) Process(ctx context.Context, spaceID, mediaID uuid.UUID) error
 	if err != nil {
 		return ErrNotUploaded
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	norm, err := Normalize(body, m.ContentType, s.cfg.MaxBytes)
 	if err != nil {

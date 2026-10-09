@@ -63,7 +63,7 @@ func TestInitialize(t *testing.T) {
 			t.Errorf("path = %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":true,"message":"ok","data":{
+		_, _ = w.Write([]byte(`{"status":true,"message":"ok","data":{
 			"authorization_url":"https://checkout.paystack.com/abc",
 			"access_code":"abc","reference":"spc-1"}}`))
 	}))
@@ -84,7 +84,7 @@ func TestInitialize(t *testing.T) {
 // status:false with HTTP 200 is a Paystack failure, not a success.
 func TestInitializeTreatsStatusFalseAsError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"status":false,"message":"Invalid email address"}`))
+		_, _ = w.Write([]byte(`{"status":false,"message":"Invalid email address"}`))
 	}))
 	defer srv.Close()
 

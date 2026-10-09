@@ -15,7 +15,7 @@ func stub(t *testing.T, body string, status int) *Client {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		w.Write([]byte(body))
+		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(srv.Close)
 	return New(srv.URL, "foot", 5*time.Second)
@@ -50,7 +50,7 @@ func TestCoordinateOrderIsLngLat(t *testing.T) {
 	var got string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.URL.Path
-		w.Write([]byte(`{"code":"Ok","durations":[[0,60]],"distances":[[0,80]]}`))
+		_, _ = w.Write([]byte(`{"code":"Ok","durations":[[0,60]],"distances":[[0,80]]}`))
 	}))
 	defer srv.Close()
 

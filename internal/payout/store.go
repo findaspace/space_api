@@ -37,7 +37,7 @@ func (s *Store) SaveAccount(ctx context.Context, a Account) (Account, error) {
 	if err != nil {
 		return Account{}, fmt.Errorf("begin: %w", err)
 	}
-	defer tx.Rollback(context.WithoutCancel(ctx))
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 
 	if _, err := tx.Exec(ctx,
 		`UPDATE payout_accounts SET is_default = false WHERE user_id = $1 AND is_default`,

@@ -103,7 +103,8 @@ func TestReleasableIgnoresClockTime(t *testing.T) {
 
 func TestReferenceIsStable(t *testing.T) {
 	id := mustUUID(t)
-	if NewReference(id) != NewReference(id) {
+	first := NewReference(id)
+	if first != NewReference(id) {
 		t.Fatal("the same payout must always produce the same reference")
 	}
 	if len(NewReference(id)) != 36 { // "pot-" plus 32 hex characters

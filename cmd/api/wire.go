@@ -52,6 +52,9 @@ func (p phoneSource) PhoneFor(ctx context.Context, userID uuid.UUID) (string, er
 	if err != nil {
 		return "", err
 	}
+	if u.Status != identity.StatusActive || u.PhoneVerifiedAt == nil {
+		return "", nil
+	}
 	return u.Phone, nil
 }
 

@@ -77,7 +77,7 @@ func TestMorePhotosScoreHigher(t *testing.T) {
 	four, _ := Score(Inputs{Type: TypeApartment, PhotoCount: 4})
 	ten, _ := Score(Inputs{Type: TypeApartment, PhotoCount: 10})
 
-	if !(one < four) {
+	if one >= four {
 		t.Errorf("one photo (%d) should score below four (%d)", one, four)
 	}
 	if ten != four {

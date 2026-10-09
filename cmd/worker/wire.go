@@ -24,6 +24,7 @@ import (
 	"github.com/samnart1/space_api/internal/platform/transcode"
 	"github.com/samnart1/space_api/internal/review"
 	"github.com/samnart1/space_api/internal/search"
+	"github.com/samnart1/space_api/internal/trust"
 )
 
 var errNotInWorker = errors.New("not available in the worker process")
@@ -44,7 +45,7 @@ type workerPhones struct{ pool *pgxpool.Pool }
 
 func (w workerPhones) PhoneFor(ctx context.Context, userID uuid.UUID) (string, error) {
 	var phone string
-	err := w.pool.QueryRow(ctx, `SELECT phone_e164 FROM users WHERE id = $1`, userID).Scan(&phone)
+	err := w.pool.QueryRow(ctx, `SELECT CASE WHEN status='active' AND phone_verified_at IS NOT NULL THEN COALESCE(phone_e164,'') ELSE '' END FROM users WHERE id = $1`, userID).Scan(&phone)
 	return phone, err
 }
 
@@ -113,6 +114,7 @@ func buildDeps(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *
 
 	return jobs.Deps{
 		Media:         mediaSvc,
+		Cleanup:       trust.NewCleaner(trust.NewStore(pool), objects),
 		Bookings:      booking.NewStore(pool),
 		Payouts:       payoutSvc,
 		Uploads:       mediaSvc,

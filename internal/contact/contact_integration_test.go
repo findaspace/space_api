@@ -25,19 +25,19 @@ func TestIntegrationRevealCapAndRepeat(t *testing.T) {
 	defer pool.Close()
 	ids := make([]uuid.UUID, 2)
 	for i := range ids {
-		if err := pool.QueryRow(ctx, "INSERT INTO users(phone_e164) VALUES($1) RETURNING id", fmt.Sprintf("+23355%07d", (time.Now().UnixNano()+int64(i))%10000000)).Scan(&ids[i]); err != nil {
+		if err := pool.QueryRow(ctx, "INSERT INTO users(phone_e164,phone_verified_at) VALUES($1,now()) RETURNING id", fmt.Sprintf("+23355%07d", (time.Now().UnixNano()+int64(i))%10000000)).Scan(&ids[i]); err != nil {
 			t.Fatal(err)
 		}
 	}
-	defer pool.Exec(ctx, "DELETE FROM users WHERE id=ANY($1)", ids)
+	defer func() { _, _ = pool.Exec(ctx, "DELETE FROM users WHERE id=ANY($1)", ids) }()
 	spaces := make([]uuid.UUID, 2)
 	for i := range spaces {
 		if err := pool.QueryRow(ctx, "INSERT INTO spaces(host_id,slug,space_type,rental_mode,status,title,base_price_minor,price_period,latitude,longitude,locality,published_at) VALUES($1,$2,'football_pitch','flexible','published','A local sports pitch',10000,'hour',5.6,-0.2,'Madina',now()) RETURNING id", ids[0], uuid.NewString()).Scan(&spaces[i]); err != nil {
 			t.Fatal(err)
 		}
 	}
-	defer pool.Exec(ctx, "DELETE FROM spaces WHERE id=ANY($1)", spaces)
-	defer pool.Exec(ctx, "DELETE FROM contact_reveals WHERE viewer_id=$1", ids[1])
+	defer func() { _, _ = pool.Exec(ctx, "DELETE FROM spaces WHERE id=ANY($1)", spaces) }()
+	defer func() { _, _ = pool.Exec(ctx, "DELETE FROM contact_reveals WHERE viewer_id=$1", ids[1]) }()
 	svc := NewService(pool, 1)
 	var wg sync.WaitGroup
 	out := make(chan struct {

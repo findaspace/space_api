@@ -34,17 +34,17 @@ func TestIntegrationSpaceLifecycleAndPhotoGuard(t *testing.T) {
 	defer pool.Close()
 	var host, other uuid.UUID
 	for i, id := range []*uuid.UUID{&host, &other} {
-		if err := pool.QueryRow(ctx, "INSERT INTO users(phone_e164) VALUES($1) RETURNING id", fmt.Sprintf("+23324%07d", (time.Now().UnixNano()+int64(i))%10000000)).Scan(id); err != nil {
+		if err := pool.QueryRow(ctx, "INSERT INTO users(phone_e164,phone_verified_at) VALUES($1,now()) RETURNING id", fmt.Sprintf("+23324%07d", (time.Now().UnixNano()+int64(i))%10000000)).Scan(id); err != nil {
 			t.Fatal(err)
 		}
 	}
-	defer pool.Exec(ctx, "DELETE FROM users WHERE id=ANY($1)", []uuid.UUID{host, other})
+	defer func() { _, _ = pool.Exec(ctx, "DELETE FROM users WHERE id=ANY($1)", []uuid.UUID{host, other}) }()
 	svc := listing.NewService(listing.NewStore(pool), roles{}, photos{}, nil)
 	sp, err := svc.Create(ctx, listing.CreateInput{HostID: host, Type: listing.TypeFootballPitch, Mode: listing.ModeFlexible, PricePeriod: listing.PeriodHour, Title: "A floodlit pitch in Madina", BasePriceMinor: 15000, MaxOccupancy: 22, Location: listing.Location{Country: "GH", Locality: "Madina", Latitude: 5.6, Longitude: -0.2}, Attributes: map[string]any{"floodlights": true}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer pool.Exec(ctx, "DELETE FROM spaces WHERE id=$1", sp.ID)
+	defer func() { _, _ = pool.Exec(ctx, "DELETE FROM spaces WHERE id=$1", sp.ID) }()
 	if _, err := svc.GetForHost(ctx, sp.ID, other); !errors.Is(err, listing.ErrNotFound) {
 		t.Fatalf("ownership leak: %v", err)
 	}

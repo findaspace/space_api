@@ -2,7 +2,8 @@ openapi: 3.1.0
 info:
   title: Space API
   version: 1.0.0
-  description: 'Money is always an integer in the currency''s minor unit (pesewas for GHS).
+  description: 'Money is always an integer in the currency''s minor unit (pesewas
+    for GHS).
 
     Dates in a booking context are calendar dates, not instants.
 
@@ -79,6 +80,27 @@ components:
           type: object
           additionalProperties:
             type: string
+    ExternalLogin:
+      type: object
+      additionalProperties: false
+      required:
+      - provider
+      - id_token
+      - nonce
+      properties:
+        provider:
+          type: string
+          enum:
+          - google
+          - microsoft
+          - apple
+        id_token:
+          type: string
+          maxLength: 16384
+        nonce:
+          type: string
+          minLength: 32
+          maxLength: 128
     User:
       type: object
       required:
@@ -93,7 +115,10 @@ components:
           format: uuid
         phone:
           type: string
-          description: E.164, for example +233244123456.
+          description: Verified E.164 contact number, or an empty string when no phone
+            is connected.
+        phone_verified:
+          type: boolean
         display_name:
           type: string
         roles:
@@ -104,6 +129,7 @@ components:
             - guest
             - host
             - admin
+            - support
         created_at:
           type: string
           format: date-time
@@ -220,7 +246,8 @@ components:
           type: string
         landmark_name:
           type: string
-          description: The nearest routed landmark. Absent until the listing has been routed.
+          description: The nearest routed landmark. Absent until the listing has been
+            routed.
         walk_minutes:
           type: integer
           description: Walking time to landmark_name. Absent until routed.
@@ -234,7 +261,8 @@ components:
           type: integer
         cover_url:
           type: string
-          description: The card-sized rendition when one exists, otherwise the full image.
+          description: The card-sized rendition when one exists, otherwise the full
+            image.
         rating:
           type: number
           format: double
@@ -280,7 +308,8 @@ components:
           type: string
         approximate:
           type: boolean
-          description: Always true. The point is snapped to a grid about 550m across until booking.
+          description: Always true. The point is snapped to a grid about 550m across
+            until booking.
     PublicListing:
       type: object
       required:
@@ -477,7 +506,8 @@ components:
         due_now_minor:
           type: integer
           format: int64
-          description: What leaves the renter's account today, including rent in advance and deposit.
+          description: What leaves the renter's account today, including rent in advance
+            and deposit.
     ReviewSummary:
       type: object
       required:
@@ -779,7 +809,8 @@ components:
               type: boolean
         location:
           type: object
-          description: 'The exact address. The host always sees it; the guest only once the
+          description: 'The exact address. The host always sees it; the guest only
+            once the
 
             booking is paid (confirmed, active or completed).
 
@@ -854,7 +885,8 @@ components:
         hold_expires_at:
           type: string
           format: date-time
-          description: 'While held, the deadline to pay (nightly) or for the host to respond
+          description: 'While held, the deadline to pay (nightly) or for the host
+            to respond
 
             (term). While approved, the deadline to pay.
 
@@ -1109,8 +1141,9 @@ components:
     PatchListing:
       type: object
       additionalProperties: false
-      description: Updates only drafts or listings in review. Editing returns the listing to draft; withdraw a published
-        listing before editing. Attributes are a complete replacement document.
+      description: Updates only drafts or listings in review. Editing returns the
+        listing to draft; withdraw a published listing before editing. Attributes
+        are a complete replacement document.
       properties:
         rental_mode:
           type: string
@@ -1173,6 +1206,43 @@ components:
           type: string
         digital_address:
           type: string
+    ListingReport:
+      type: object
+      properties:
+        id: &id003
+          type: string
+          format: uuid
+        space_id: *id003
+        reason: &id004
+          type: string
+        details: *id004
+        status: *id004
+        created_at:
+          type: string
+          format: date-time
+        title:
+          type: string
+        slug:
+          type: string
+      required:
+      - id
+      - space_id
+      - reason
+      - details
+      - status
+      - created_at
+      - title
+      - slug
+    CommunicationBoundary:
+      type: object
+      properties:
+        blocked:
+          type: boolean
+        messaging_allowed:
+          type: boolean
+      required:
+      - blocked
+      - messaging_allowed
   responses:
     Problem:
       description: RFC 9457 problem document
@@ -1214,7 +1284,8 @@ paths:
   /v1/auth/otp:
     post:
       summary: Send a one-time code by SMS
-      description: 'Never reveals whether an account exists; users are created on first
+      description: 'Never reveals whether an account exists; users are created on
+        first
 
         successful verification. Rate limited per phone and per client IP.
 
@@ -1328,7 +1399,8 @@ paths:
   /v1/me:
     patch:
       summary: Update the signed-in user's display name
-      description: Names are shown to the other party before booking, so contact details are refused.
+      description: Names are shown to the other party before booking, so contact details
+        are refused.
       operationId: patchMe
       security:
       - bearerAuth: []
@@ -1371,10 +1443,150 @@ paths:
                 $ref: '#/components/schemas/User'
         '401':
           $ref: '#/components/responses/Problem'
+    delete:
+      summary: Close account and remove profile data
+      security:
+      - bearerAuth: []
+      responses:
+        '204':
+          description: Success
+        '401':
+          description: Not signed in
+        '403':
+          description: Not permitted
+        '404':
+          description: Not found
+        '409':
+          description: Resolve outstanding responsibilities first
+        '422':
+          description: Invalid input
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirmation:
+                  type: string
+                  const: DELETE
+              required:
+              - confirmation
+  /v1/auth/external:
+    post:
+      summary: Exchange a verified provider identity for a Findaspace session
+      operationId: externalLogin
+      description: Only the trusted web backend may call this endpoint. Provider issuer,
+        audience, signature, expiry and nonce are verified by the API.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalLogin'
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+  /v1/me/sign-in-methods:
+    get:
+      summary: List connected external sign-in methods
+      operationId: signInMethods
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Connected methods
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - methods
+                properties:
+                  methods:
+                    type: array
+                    items:
+                      type: string
+                      enum:
+                      - google
+                      - microsoft
+                      - apple
+        '401':
+          $ref: '#/components/responses/Problem'
+    post:
+      summary: Connect a provider to the recently authenticated account
+      operationId: linkSignInMethod
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalLogin'
+      responses:
+        '200':
+          description: Connected and session renewed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/me/phone:
+    post:
+      summary: Verify and connect a phone to the recently authenticated account
+      operationId: linkPhone
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - phone
+              - code
+              properties:
+                phone:
+                  type: string
+                code:
+                  type: string
+                  pattern: ^[0-9]{6}$
+      responses:
+        '200':
+          description: Phone connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
   /v1/search:
     get:
       summary: Search published listings
-      description: 'Keyset paginated. Pass next_cursor back as cursor to continue; a new
+      description: 'Keyset paginated. Pass next_cursor back as cursor to continue;
+        a new
 
         filter means starting again without one.
 
@@ -1388,7 +1600,8 @@ paths:
           maxLength: 80
       - name: type
         in: query
-        description: 'One space type, or several joined by commas. Never repeated: the
+        description: 'One space type, or several joined by commas. Never repeated:
+          the
 
           API reads this parameter once, so type=a&type=b keeps only a.
 
@@ -1501,7 +1714,8 @@ paths:
           type: string
       responses:
         '200':
-          description: Up to three walks, nearest first. Empty until the listing is routed.
+          description: Up to three walks, nearest first. Empty until the listing is
+            routed.
           content:
             application/json:
               schema:
@@ -1583,7 +1797,8 @@ paths:
   /v1/listings/{slug}/quote:
     get:
       summary: Price a stay or a lease
-      description: 'Term listings need starts_on and months. Nightly listings need check_in
+      description: 'Term listings need starts_on and months. Nightly listings need
+        check_in
 
         and check_out. Dates are YYYY-MM-DD.
 
@@ -1634,7 +1849,8 @@ paths:
   /v1/space-types:
     get:
       summary: Every space type, its fields and their labels
-      description: The one source of truth for attribute labels. Clients never duplicate them.
+      description: The one source of truth for attribute labels. Clients never duplicate
+        them.
       operationId: getSpaceTypes
       responses:
         '200':
@@ -1739,7 +1955,7 @@ paths:
           $ref: '#/components/responses/Problem'
         '422':
           $ref: '#/components/responses/Problem'
-        '409': &id003
+        '409': &id005
           $ref: '#/components/responses/Problem'
         '401':
           $ref: '#/components/responses/Problem'
@@ -1760,16 +1976,17 @@ paths:
           description: Success
           content:
             application/json:
-              schema: &id004
+              schema: &id006
                 $ref: '#/components/schemas/HostListing'
-        '401': *id003
-        '404': *id003
-        '409': *id003
-        '422': *id003
+        '401': *id005
+        '404': *id005
+        '409': *id005
+        '422': *id005
   /v1/spaces/{id}/submit:
     post:
       summary: Send a draft for review
-      description: Needs at least one ready photo, a locality and a price. An admin then publishes it.
+      description: Needs at least one ready photo, a locality and a price. An admin
+        then publishes it.
       operationId: submitListing
       security:
       - bearerAuth: []
@@ -1867,7 +2084,8 @@ paths:
   /v1/spaces/{id}/media/{mediaId}/confirm:
     post:
       summary: Tell the API an upload finished
-      description: Verifies the object exists, then queues processing. Returns while the photo is still pending.
+      description: Verifies the object exists, then queues processing. Returns while
+        the photo is still pending.
       operationId: confirmUpload
       security:
       - bearerAuth: []
@@ -1971,7 +2189,8 @@ paths:
           $ref: '#/components/responses/Problem'
     post:
       summary: Hold dates, or request a lease
-      description: 'Nightly bookings are held for payment. Term bookings are requests the
+      description: 'Nightly bookings are held for payment. Term bookings are requests
+        the
 
         host approves before anything is paid. Priced on the server, always.
 
@@ -1982,7 +2201,8 @@ paths:
       parameters:
       - name: Idempotency-Key
         in: header
-        description: Retrying with the same key returns the original booking instead of a second one.
+        description: Retrying with the same key returns the original booking instead
+          of a second one.
         schema:
           type: string
           maxLength: 100
@@ -2056,7 +2276,8 @@ paths:
   /v1/bookings/{id}/pay:
     post:
       summary: Start, or resume, payment for a payable booking
-      description: Payable means held for nightly, approved for term. Returns the open attempt if one exists.
+      description: Payable means held for nightly, approved for term. Returns the
+        open attempt if one exists.
       operationId: payBooking
       security:
       - bearerAuth: []
@@ -2082,7 +2303,8 @@ paths:
           $ref: '#/components/responses/Problem'
   /v1/bookings/{id}/approve:
     post:
-      summary: The host approves a lease request, which starts the guest's payment window
+      summary: The host approves a lease request, which starts the guest's payment
+        window
       operationId: approveBooking
       security:
       - bearerAuth: []
@@ -2529,7 +2751,8 @@ paths:
   /v1/spaces/{id}/contact:
     get:
       summary: The owner's name and phone number, for a signed-in renter
-      description: 'Only published listings. Every reveal is recorded against the viewer''s
+      description: 'Only published listings. Every reveal is recorded against the
+        viewer''s
 
         verified account, and each account may reveal a limited number of
 
@@ -2561,7 +2784,10 @@ paths:
                     type: string
                   phone:
                     type: string
-                    description: E.164, for example +233244123456.
+                    description: Verified E.164 contact number, or an empty string
+                      when no phone is connected.
+        phone_verified:
+          type: boolean
         '401':
           $ref: '#/components/responses/Problem'
         '404':
@@ -2586,11 +2812,11 @@ paths:
           description: Success
           content:
             application/json:
-              schema: *id004
-        '401': *id003
-        '404': *id003
-        '409': *id003
-        '422': *id003
+              schema: *id006
+        '401': *id005
+        '404': *id005
+        '409': *id005
+        '422': *id005
   /v1/spaces/{id}/archive:
     post:
       summary: Archive a listing owned by the caller
@@ -2609,11 +2835,11 @@ paths:
           description: Success
           content:
             application/json:
-              schema: *id004
-        '401': *id003
-        '404': *id003
-        '409': *id003
-        '422': *id003
+              schema: *id006
+        '401': *id005
+        '404': *id005
+        '409': *id005
+        '422': *id005
   /v1/spaces/{id}/media/order:
     put:
       summary: Set ready photos in the exact supplied order; first is cover
@@ -2641,10 +2867,10 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Media'
-        '401': *id003
-        '404': *id003
-        '409': *id003
-        '422': *id003
+        '401': *id005
+        '404': *id005
+        '409': *id005
+        '422': *id005
       requestBody:
         required: true
         content:
@@ -2683,8 +2909,205 @@ paths:
       responses:
         '204':
           description: Success
-        '401': *id003
-        '404': *id003
-        '409': *id003
-        '422': *id003
+        '401': *id005
+        '404': *id005
+        '409': *id005
+        '422': *id005
+  /v1/spaces/{id}/reports:
+    post:
+      summary: Report a published listing
+      security:
+      - bearerAuth: []
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: *id003
+                  status: *id004
+                required:
+                - id
+                - status
+        '401':
+          description: Not signed in
+        '403':
+          description: Not permitted
+        '404':
+          description: Not found
+        '409':
+          description: Resolve outstanding responsibilities first
+        '422':
+          description: Invalid input
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  enum:
+                  - suspected_scam
+                  - unavailable
+                  - incorrect_details
+                  - abuse
+                  - other
+                details:
+                  type: string
+                  maxLength: 2000
+              required:
+              - reason
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+  /v1/threads/{id}/safety:
+    get:
+      summary: Communication boundaries for a participant
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunicationBoundary'
+        '401':
+          description: Not signed in
+        '403':
+          description: Not permitted
+        '404':
+          description: Not found
+        '409':
+          description: Resolve outstanding responsibilities first
+        '422':
+          description: Invalid input
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+  /v1/threads/{id}/block:
+    post:
+      summary: Block messages and new contact reveals from this person
+      security:
+      - bearerAuth: []
+      responses:
+        '204':
+          description: Success
+        '401':
+          description: Not signed in
+        '403':
+          description: Not permitted
+        '404':
+          description: Not found
+        '409':
+          description: Resolve outstanding responsibilities first
+        '422':
+          description: Invalid input
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+    delete:
+      summary: Remove your own block
+      security:
+      - bearerAuth: []
+      responses:
+        '204':
+          description: Success
+        '401':
+          description: Not signed in
+        '403':
+          description: Not permitted
+        '404':
+          description: Not found
+        '409':
+          description: Resolve outstanding responsibilities first
+        '422':
+          description: Invalid input
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+  /v1/admin/reports:
+    get:
+      summary: Open reports; administrator or support only
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reports:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ListingReport'
+                required:
+                - reports
+        '401':
+          description: Not signed in
+        '403':
+          description: Not permitted
+        '404':
+          description: Not found
+        '409':
+          description: Resolve outstanding responsibilities first
+        '422':
+          description: Invalid input
+  /v1/admin/reports/{id}/review:
+    post:
+      summary: Resolve or dismiss a report
+      security:
+      - bearerAuth: []
+      responses:
+        '204':
+          description: Success
+        '401':
+          description: Not signed in
+        '403':
+          description: Not permitted
+        '404':
+          description: Not found
+        '409':
+          description: Resolve outstanding responsibilities first
+        '422':
+          description: Invalid input
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                  - resolved
+                  - dismissed
+                note:
+                  type: string
+                  maxLength: 2000
+                withdraw_listing:
+                  type: boolean
+                  default: false
+              required:
+              - status
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
 security: []

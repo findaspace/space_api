@@ -32,11 +32,12 @@ type refreshRequest struct {
 }
 
 type userResponse struct {
-	ID          string          `json:"id"`
-	Phone       string          `json:"phone"`
-	DisplayName string          `json:"display_name"`
-	Roles       []identity.Role `json:"roles"`
-	CreatedAt   time.Time       `json:"created_at"`
+	ID            string          `json:"id"`
+	Phone         string          `json:"phone"`
+	PhoneVerified bool            `json:"phone_verified"`
+	DisplayName   string          `json:"display_name"`
+	Roles         []identity.Role `json:"roles"`
+	CreatedAt     time.Time       `json:"created_at"`
 }
 
 type tokenResponse struct {
@@ -50,11 +51,12 @@ type tokenResponse struct {
 
 func toUserResponse(u identity.User) userResponse {
 	return userResponse{
-		ID:          u.ID.String(),
-		Phone:       u.Phone,
-		DisplayName: u.DisplayName,
-		Roles:       u.Roles,
-		CreatedAt:   u.CreatedAt,
+		ID:            u.ID.String(),
+		Phone:         u.Phone,
+		PhoneVerified: u.PhoneVerifiedAt != nil,
+		DisplayName:   u.DisplayName,
+		Roles:         u.Roles,
+		CreatedAt:     u.CreatedAt,
 	}
 }
 
@@ -204,10 +206,6 @@ func writeIdentityError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, identity.ErrInvalidPhone):
 		p = Problem{Status: http.StatusUnprocessableEntity, Title: "invalid phone number",
 			Errors: []FieldError{{Field: "phone", Code: "invalid"}}}
-
-	case errors.Is(err, identity.ErrTooManyOTP):
-		p = Problem{Status: http.StatusTooManyRequests, Title: "too many requests",
-			Detail: "wait before requesting another code"}
 
 	case errors.Is(err, identity.ErrOTPNotFound):
 		p = Problem{Status: http.StatusUnprocessableEntity, Title: "no active code",

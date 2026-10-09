@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/samnart1/space_api/internal/platform/postgres"
@@ -115,6 +116,10 @@ func (s *Store) Append(ctx context.Context, threadID, senderID uuid.UUID, body s
 			threadID, senderID, body, redacted).
 			Scan(&m.ID, &m.ThreadID, &m.SenderID, &m.Body, &m.Redacted, &m.CreatedAt)
 		if err != nil {
+			var dbErr *pgconn.PgError
+			if errors.As(err, &dbErr) && dbErr.ConstraintName == "messages_blocked" {
+				return ErrBlocked
+			}
 			return fmt.Errorf("insert message: %w", err)
 		}
 
@@ -188,3 +193,5 @@ func (s *Store) HasConfirmedBooking(ctx context.Context, spaceID, guestID uuid.U
 	}
 	return ok, nil
 }
+
+var ErrBlocked = errors.New("messaging unavailable for this conversation")
